@@ -1,0 +1,18 @@
+# Gerenciado pelo Traefik Web UI — edições manuais são preservadas,
+# mas chaves alteradas pela UI serão reescritas.
+http:
+  routers:
+    meu-app:
+      rule: Host(`app.exemplo.com`)
+      service: meu-app
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+  services:
+    meu-app:
+      loadBalancer:
+        servers:
+          - url: http://10.0.0.9:8080
+        passHostHeader: true
+  middlewares: {}

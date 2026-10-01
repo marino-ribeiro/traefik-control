@@ -1,0 +1,57 @@
+# Traefik + painel de gerenciamento.
+#
+#   cp .env.example .env   # e edite UI_PASSWORD / UI_SESSION_SECRET
+#   docker compose up -d --build
+#
+# O volume `dynamic` é a peça central: o painel ESCREVE nele e o
+# Traefik o OBSERVA (`watch: true`), então salvar na UI recarrega o Traefik.
+
+services:
+  traefik:
+    image: traefik:v3.3
+    container_name: traefik
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      # A porta 8080 (API) fica DELIBERADAMENTE sem publicar:
+      # só o painel a alcança, pela rede interna.
+    volumes:
+      - ./traefik-example/traefik.yml:/etc/traefik/traefik.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - dynamic:/dynamic
+      - letsencrypt:/letsencrypt
+    networks:
+      - edge
+
+  traefik-ui:
+    build: .
+    container_name: traefik-ui
+    restart: unless-stopped
+    depends_on:
+      - traefik
+    environment:
+      TRAEFIK_API_URL: http://traefik:8080
+      TRAEFIK_METRICS_URL: http://traefik:8080/metrics
+      TRAEFIK_DYNAMIC_FILE: /dynamic/dynamic.yml
+      TRAEFIK_MOCK: "0"
+      UI_PASSWORD: ${UI_PASSWORD:?defina UI_PASSWORD no .env}
+      UI_SESSION_SECRET: ${UI_SESSION_SECRET:?defina UI_SESSION_SECRET no .env}
+    volumes:
+      - dynamic:/dynamic
+    networks:
+      - edge
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.traefik-ui.rule: Host(`traefik.exemplo.com`)
+      traefik.http.routers.traefik-ui.entrypoints: websecure
+      traefik.http.routers.traefik-ui.tls.certresolver: letsencrypt
+      traefik.http.services.traefik-ui.loadbalancer.server.port: "3000"
+
+volumes:
+  dynamic:
+  letsencrypt:
+
+networks:
+  edge:
+    driver: bridge

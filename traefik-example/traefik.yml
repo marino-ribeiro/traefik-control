@@ -1,0 +1,59 @@
+# Configuração ESTÁTICA de exemplo para o Traefik.
+# Monte este arquivo em /etc/traefik/traefik.yml no container do Traefik.
+
+api:
+  dashboard: true
+  # A API fica exposta apenas na rede interna do Compose; o painel
+  # fala com ela por http://traefik:8080. Não publique a porta 8080.
+  insecure: true
+
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+  websecure:
+    address: ":443"
+
+providers:
+  docker:
+    exposedByDefault: false
+  file:
+    # MESMO arquivo que o painel escreve.
+    filename: /dynamic/dynamic.yml
+    watch: true
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: voce@exemplo.com
+      storage: /letsencrypt/acme.json
+      httpChallenge:
+        entryPoint: web
+
+# O painel de métricas depende inteiramente desta seção.
+metrics:
+  prometheus:
+    addEntryPointsLabels: true
+    # addRoutersLabels é o que alimenta o gráfico "routers por volume".
+    # Fica desligado por padrão no Traefik porque aumenta a cardinalidade.
+    addRoutersLabels: true
+    addServicesLabels: true
+    # Buckets do histograma de latência — os percentis do painel saem daqui,
+    # então a resolução deles é o limite da precisão de p50/p95/p99.
+    buckets:
+      - 0.01
+      - 0.05
+      - 0.1
+      - 0.3
+      - 0.5
+      - 1.0
+      - 2.5
+      - 5.0
+      - 10.0
+
+log:
+  level: INFO

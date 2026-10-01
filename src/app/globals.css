@@ -1,0 +1,233 @@
+@import "tailwindcss";
+
+/*
+ * Três linguagens somadas, nesta ordem de prioridade:
+ *
+ *  1. netcup (legal.netcupvps.marinotech.com.br) — a identidade: Barlow
+ *     Condensed 900 em caixa alta, tracking aberto nos micro-rótulos e o
+ *     vermelho #FF3B5C que esquenta para laranja no hover.
+ *  2. Geist (nextjs.org) — o acabamento: gradientes verticais sutis, headline
+ *     em fade e o easing cubic-bezier(.32,.72,0,1).
+ *  3. macOS — a matéria: superfícies de vidro com blur + saturação, realce
+ *     interno de 1px no topo e cantos generosos, sobre preto OLED absoluto.
+ */
+@theme {
+  /* OLED: preto verdadeiro, para o painel apagar o pixel de fato. */
+  --color-ink: #000000;
+  --color-void: #050507;
+  --color-card: #0b0b10;
+  --color-surface: #121219;
+  --color-line: #22222c;
+  --color-line-strong: #3a3a4a;
+  --color-fg: #f5f5fa;
+  --color-muted: #9090a0;
+
+  --color-red: #ff3b5c;
+  --color-orange: #ff6b35;
+
+  /* Estados. Sobre preto puro dá para saturar mais sem estourar. */
+  --color-ok: #24d17e;
+  --color-warn: #ffb020;
+  --color-down: #ff3b5c;
+
+  /* Séries de gráfico — validadas com scripts/validate_palette.js contra a
+     superfície #0a0a0a. Ver src/components/charts/palette.ts. */
+  --color-s-good: #0ca30c;
+  --color-s-neutral: #9090a0;
+  --color-s-serious: #ec835a;
+  --color-s-critical: #d03b3b;
+  --color-s-blue: #3987e5;
+  --color-s-orange: #d95926;
+  --color-s-p50: #1c5cab;
+  --color-s-p95: #3987e5;
+  --color-s-p99: #86b6ef;
+
+  --font-display: var(--font-barlow-condensed), "Arial Narrow", sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, monospace;
+
+  /* macOS arredonda com generosidade; o Geist é curto nos controles. */
+  --radius-panel: 14px;
+  --radius-tile: 12px;
+  --radius-control: 8px;
+
+  --ease-geist: cubic-bezier(0.32, 0.72, 0, 1);
+
+  --shadow-soft: 0 1px 1px rgba(0, 0, 0, 0.4), 0 4px 12px -4px rgba(0, 0, 0, 0.6);
+  --shadow-panel: 0 8px 32px rgba(0, 0, 0, 0.6);
+  --shadow-lift: 0 2px 8px rgba(0, 0, 0, 0.5), 0 16px 48px -12px rgba(0, 0, 0, 0.8);
+  --shadow-red: 0 4px 16px -4px rgba(255, 59, 92, 0.45);
+
+  --spacing-header: 64px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  background: var(--color-ink);
+}
+
+body {
+  background: var(--color-ink);
+  color: var(--color-fg);
+  font-family: var(--font-display);
+  font-size: 16px;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Brilho ambiente por trás do vidro. Sem nada para refratar, superfície
+   translúcida sobre preto puro fica igual a superfície opaca — então o
+   fundo precisa ter o que borrar. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(60rem 40rem at 12% -10%, rgba(255, 59, 92, 0.1), transparent 60%),
+    radial-gradient(50rem 34rem at 92% 4%, rgba(255, 107, 53, 0.07), transparent 60%),
+    radial-gradient(46rem 40rem at 50% 108%, rgba(57, 135, 229, 0.07), transparent 60%);
+}
+
+/* ---------------------------------------------------------------- vidro */
+
+/* A receita macOS: translucidez + blur + saturação, e o realce interno de
+   1px no topo que simula a luz batendo na quina do painel. */
+@utility glass {
+  background: rgba(255, 255, 255, 0.045);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.085);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    var(--shadow-panel);
+}
+
+@utility glass-tile {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+@utility glass-bar {
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Sem backdrop-filter (Firefox com a flag desligada, forced-colors), a
+   translucidez sozinha deixaria o texto sobre o conteúdo de trás. */
+@supports not (backdrop-filter: blur(1px)) {
+  .glass,
+  .glass-tile {
+    background: #0d0d13;
+  }
+  .glass-bar {
+    background: #050507;
+  }
+}
+
+/* ------------------------------------------------------------ tipografia */
+
+@utility eyebrow {
+  font-weight: 500;
+  font-size: 11px;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--color-red);
+}
+
+@utility label-caps {
+  font-weight: 500;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+@utility title-black {
+  font-weight: 900;
+  letter-spacing: -0.5px;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+@utility title-fade {
+  background-image: linear-gradient(180deg, var(--color-fg) 0%, #7e7e91 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@utility btn-grad {
+  background-image: linear-gradient(110deg, #ff4767 0.06%, var(--color-red) 100%);
+}
+
+/* Números tabulares para valores que mudam a cada poll, senão a largura
+   dança a cada atualização. */
+@utility metric {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+@layer base {
+  ::selection {
+    background: var(--color-red);
+    color: var(--color-fg);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-orange);
+    outline-offset: 2px;
+  }
+
+  input,
+  select,
+  textarea,
+  button {
+    font-family: inherit;
+  }
+}
+
+@layer utilities {
+  .scroll-slim {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-line-strong) transparent;
+  }
+  .scroll-slim::-webkit-scrollbar {
+    height: 8px;
+    width: 8px;
+  }
+  .scroll-slim::-webkit-scrollbar-thumb {
+    background: var(--color-line-strong);
+    border-radius: 4px;
+  }
+  .scroll-slim::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.animate-pulse-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulse-dot {
+    animation: none;
+  }
+  html {
+    scroll-behavior: auto;
+  }
+}
