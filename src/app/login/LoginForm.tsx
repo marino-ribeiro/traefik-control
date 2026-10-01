@@ -21,7 +21,13 @@ export function LoginForm() {
         body: JSON.stringify({ password }),
       });
       if (!res.ok) {
-        setError(res.status === 401 ? "Senha incorreta." : `Falha no login (${res.status}).`);
+        if (res.status === 401) {
+          setError("Senha incorreta.");
+        } else {
+          const body = (await res.json().catch(() => ({}))) as { error?: string };
+          const msg = body.error ?? `falha no login (${res.status})`;
+          setError(`${msg.charAt(0).toUpperCase()}${msg.slice(1)}.`);
+        }
         return;
       }
       router.replace("/");

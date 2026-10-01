@@ -1,5 +1,5 @@
-# Gerenciado pelo Traefik Web UI — edições manuais são preservadas,
-# mas chaves alteradas pela UI serão reescritas.
+# Gerenciado pelo Traefik Control. Comentários e formatação feitos à mão
+# são preservados; só as entradas editadas pelo painel são reescritas.
 http:
   routers:
     meu-app:
@@ -15,4 +15,3 @@ http:
         servers:
           - url: http://10.0.0.9:8080
         passHostHeader: true
-  middlewares: {}

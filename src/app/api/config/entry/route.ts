@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
+import { rejectCrossSite } from "@/lib/request-guard";
 import { ConfigError, deleteEntry, upsertEntry, type Kind, type Section } from "@/lib/config-store";
 
 export const dynamic = "force-dynamic";
@@ -27,6 +28,8 @@ function validate(section: unknown, kind: unknown): { section: Section; kind: Ki
 
 /** Create or update one entry in the dynamic file. */
 export async function POST(request: Request) {
+  const blocked = rejectCrossSite(request);
+  if (blocked) return blocked;
   try {
     await requireAuth();
     const body = (await request.json()) as {
@@ -49,6 +52,8 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  const blocked = rejectCrossSite(request, { json: false });
+  if (blocked) return blocked;
   try {
     await requireAuth();
     const url = new URL(request.url);
