@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { Badge, Button, Checkbox, Field, Input, Notice, Select, Textarea, cx } from "@/components/ui/primitives";
 import { CodeEditor } from "@/components/ui/CodeEditor";
+import { buildRouterValue, buildServiceValue, type RouterValue, type ServiceValue } from "./form-values";
+
+export type { RouterValue, ServiceValue } from "./form-values";
 
 /* ================================================================ helpers */
 
@@ -55,15 +58,6 @@ function toggle(list: string[], value: string): string[] {
 
 /* ============================================================ RouterForm */
 
-export interface RouterValue {
-  rule?: string;
-  entryPoints?: string[];
-  service?: string;
-  middlewares?: string[];
-  priority?: number;
-  tls?: Record<string, unknown>;
-}
-
 export function RouterForm({
   initialName,
   initial,
@@ -98,13 +92,10 @@ export function RouterForm({
     if (priority && !Number.isFinite(Number(priority))) return setError("Prioridade precisa ser um número.");
     setError(null);
 
-    const value: RouterValue = { rule: rule.trim(), service: service.trim() };
-    if (eps.length) value.entryPoints = eps;
-    if (mws.length) value.middlewares = mws;
-    if (priority) value.priority = Number(priority);
-    if (tlsOn) value.tls = certResolver.trim() ? { certResolver: certResolver.trim() } : {};
-
-    onSubmit(name.trim(), value);
+    onSubmit(
+      name.trim(),
+      buildRouterValue(initial, { rule, service, entryPoints: eps, middlewares: mws, priority, tlsOn, certResolver }),
+    );
   }
 
   return (
@@ -196,14 +187,6 @@ export function RouterForm({
 
 /* =========================================================== ServiceForm */
 
-export interface ServiceValue {
-  loadBalancer?: {
-    servers?: { url?: string; address?: string }[];
-    passHostHeader?: boolean;
-    healthCheck?: { path?: string; interval?: string };
-  };
-}
-
 export function ServiceForm({
   initialName,
   initial,
@@ -218,6 +201,9 @@ export function ServiceForm({
   busy: boolean;
 }) {
   const isHttp = section === "http";
+  /* weighted, mirroring, failover: o formulário só sabe loadBalancer, e
+     acrescentá-lo a um desses deixaria o service inválido. */
+  const unsupported = initial != null && initial.loadBalancer == null && Object.keys(initial).length > 0;
   const existing = (initial?.loadBalancer?.servers ?? [])
     .map((s) => s.url ?? s.address ?? "")
     .filter(Boolean);
@@ -230,6 +216,7 @@ export function ServiceForm({
   const [error, setError] = useState<string | null>(null);
 
   function submit() {
+    if (unsupported) return;
     if (!name.trim()) return setError("O nome é obrigatório.");
     const list = splitList(servers);
     if (list.length === 0) return setError("Informe pelo menos um servidor.");
@@ -242,14 +229,26 @@ export function ServiceForm({
     }
     setError(null);
 
-    const lb: NonNullable<ServiceValue["loadBalancer"]> = {
-      servers: list.map((v) => (isHttp ? { url: v } : { address: v })),
-    };
-    if (isHttp) {
-      lb.passHostHeader = passHost;
-      if (hcPath.trim()) lb.healthCheck = { path: hcPath.trim(), interval: hcInterval.trim() || "10s" };
-    }
-    onSubmit(name.trim(), { loadBalancer: lb });
+    onSubmit(
+      name.trim(),
+      buildServiceValue(initial, {
+        isHttp,
+        servers: list,
+        passHostHeader: passHost,
+        hcPath,
+        hcInterval,
+        serversTransport: initial?.loadBalancer?.serversTransport ?? "",
+      }),
+    );
+  }
+
+  if (unsupported) {
+    return (
+      <Notice tone="warn">
+        Este service é do tipo <strong>{Object.keys(initial ?? {})[0]}</strong>, e o formulário só edita
+        loadBalancer. Edite-o pelo YAML bruto em Gerenciar.
+      </Notice>
+    );
   }
 
   return (
