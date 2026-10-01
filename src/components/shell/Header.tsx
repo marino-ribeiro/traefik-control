@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Nav } from "./Nav";
+import { Nav, ServerLink } from "./Nav";
 import { cx } from "@/components/ui/primitives";
 import { Activity, Signal } from "@/components/ui/icons";
 
@@ -7,12 +7,10 @@ import { Activity, Signal } from "@/components/ui/icons";
 export function Header({
   mock,
   target,
-  version,
   authed,
 }: {
   mock: boolean;
   target: string;
-  version?: string;
   authed: boolean;
 }) {
   return (
@@ -38,7 +36,7 @@ export function Header({
           {mock ? <Activity size={11} strokeWidth={2.6} aria-hidden /> : <Signal size={11} strokeWidth={2.6} aria-hidden />}
           {mock ? "demo" : "live"}
         </span>
-        {version && <span className="hidden font-mono text-[11px] text-muted/70 xl:inline">v{version}</span>}
+        <ServerLink />
         {authed && (
           <form action="/api/auth/logout" method="post">
             <button

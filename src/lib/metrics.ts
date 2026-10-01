@@ -99,7 +99,7 @@ const state: SamplerState = (globalRef.__traefikSampler ??= {
   started: false,
 });
 
-function metricsUrl(): string {
+export function metricsUrl(): string {
   const explicit = process.env.TRAEFIK_METRICS_URL;
   if (explicit) return explicit;
   const base = (process.env.TRAEFIK_API_URL ?? "").replace(/\/+$/, "");

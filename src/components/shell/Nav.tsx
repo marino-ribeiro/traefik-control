@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cx } from "@/components/ui/primitives";
-import { DoorOpen, Gauge, Layers, LayoutDashboard, Route, Server, Sliders, type LucideIcon } from "@/components/ui/icons";
+import { DoorOpen, Gauge, HardDrive, Layers, LayoutDashboard, Route, Server, Sliders, type LucideIcon } from "@/components/ui/icons";
 
 interface NavLink {
   href: string;
@@ -36,6 +36,7 @@ export function Nav() {
             key={href}
             href={href}
             aria-current={active ? "page" : undefined}
+            title={label}
             className={cx(
               "flex items-center gap-2 rounded-control px-3 py-2 text-[12.5px] font-medium uppercase tracking-[0.09em]",
               "transition-[background,color] duration-200 ease-geist",
@@ -43,7 +44,10 @@ export function Nav() {
             )}
           >
             <Icon size={14} strokeWidth={2.2} aria-hidden className={active ? "text-red" : ""} />
-            {label}
+            {/* Com os 7 itens, logo, selos e o atalho do Servidor, os rótulos só cabem a partir de ~1320px;
+                abaixo disso fica só o ícone. sr-only (não hidden): o leitor de
+                tela continua lendo o nome do link. */}
+            <span className="sr-only min-[1320px]:not-sr-only">{label}</span>
           </Link>
         );
       })}
@@ -75,5 +79,30 @@ export function MobileNav() {
         );
       })}
     </nav>
+  );
+}
+
+/**
+ * Atalho para a página Servidor, ao lado do selo live/demo no header — fora
+ * do menu principal, que é sobre roteamento. Visível em qualquer largura:
+ * é o único caminho até a página, inclusive no mobile.
+ */
+export function ServerLink() {
+  const active = isActive(usePathname(), "/server");
+  return (
+    <Link
+      href="/server"
+      aria-current={active ? "page" : undefined}
+      aria-label="Servidor: endereços e configuração"
+      title="Servidor: endereços e configuração"
+      className={cx(
+        "inline-flex size-8 items-center justify-center rounded-control border transition-colors duration-200 ease-geist",
+        active
+          ? "border-red/50 bg-white/8 text-red"
+          : "border-white/10 text-muted hover:border-white/25 hover:bg-white/5 hover:text-fg",
+      )}
+    >
+      <HardDrive size={14} strokeWidth={2.2} aria-hidden />
+    </Link>
   );
 }

@@ -16,7 +16,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <Header
         mock={snapshot?.mock ?? false}
         target={target}
-        version={snapshot?.version?.Version}
         authed={!authDisabled()}
       />
       <div className="fixed inset-x-0 top-header z-[90] lg:hidden">
