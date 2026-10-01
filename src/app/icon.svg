@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- T | — o T do TRAEFIK e a barra vermelha do logo, grandes o bastante
+       para ler numa aba de 16px (o T | C completo ficava ilegível ali).
+       Formas, não <text>: o favicon renderiza sem as webfonts do site. -->
+  <rect width="32" height="32" rx="6" fill="#000"/>
+  <path fill="#f5f5fa" d="M3 4h18v5.5h-6.25V28H9.25V9.5H3z"/>
+  <rect x="23.5" y="6" width="4" height="22" fill="#ff3b5c"/>
+</svg>
