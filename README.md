@@ -15,11 +15,12 @@ YAML no servidor na unha.
 |---|---|
 | **Visão geral** | Contadores de routers/services/middlewares, erros e avisos, providers ativos, entrypoints e um painel de diagnóstico com tudo que não está saudável |
 | **Métricas** | Requisições por segundo empilhadas por classe de status, percentis de latência, tráfego de entrada/saída e ranking de routers por volume — tudo com tooltip, tabela equivalente e atualização ao vivo |
-| **Routers** | HTTP/TCP/UDP com busca, filtro, ordenação e linha expansível. **Criar, editar e remover** direto da tabela |
+| **Routers** | HTTP/TCP/UDP com busca, filtro, ordenação e linha expansível. **Criar, editar e remover** direto da tabela. Cada router HTTP com `Host()` ganha o link do serviço, que abre numa aba nova (scheme e porta saem do entrypoint) |
 | **Services** | Servidores do load balancer com estado individual, health check e sessão fixa. **CRUD na própria tela** |
 | **Middlewares** | Tipo, configuração completa e onde cada um é usado. **CRUD na própria tela** |
 | **Entrypoints** | Portas em escuta, redirecionamentos e cert resolver (somente leitura — vêm da config estática) |
-| **Gerenciar** | A mesma edição, organizada por tipo, mais um editor de YAML bruto do arquivo inteiro |
+| **Gerenciar** | A mesma edição, organizada por tipo, mais um editor de YAML bruto do arquivo inteiro — com números de linha, guias de indentação e Tab/Enter de IDE (Ctrl+M devolve o Tab à navegação) |
+| **Servidor** | Atalho ao lado do selo live/demo: IP público (A/AAAA) e interno para apontamento DNS, com botão de copiar; versão e uptime do Traefik; arquivo, métricas e autenticação em uso |
 
 ## De onde vêm os dados
 
@@ -51,14 +52,32 @@ Este painel reescreve o roteamento do seu Traefik. Ele foi construído assumindo
 - **Senha obrigatória em produção** (`UI_PASSWORD`). Cookie de sessão `httpOnly`
   assinado com HMAC-SHA256, comparação em tempo constante, validade de 12h.
   Deixar `UI_PASSWORD` vazio **desativa a autenticação** — só faça isso localmente.
+- **Limite de tentativas**: 5 senhas erradas bloqueiam aquele cliente por 15 min
+  (identificado pelo IP que o proxy anota em `X-Forwarded-For`).
+- **Proteção contra CSRF**: toda rota que escreve exige `application/json` e
+  requisição da mesma origem (`Sec-Fetch-Site`/`Origin`). O cookie é `SameSite=lax`,
+  e isso sozinho não bastaria — "site" inclui qualquer outro subdomínio seu.
+- **Gravações em fila**: uma por vez, então duas abas salvando juntas não apagam
+  uma a outra. Vale por processo — com réplicas, cada uma tem a sua fila.
 - **A API do Traefik nunca é exposta ao navegador.** Todo acesso passa pelo servidor
   Next.js; o `docker-compose.yml` deliberadamente **não publica a porta 8080**.
 - **Escrita atômica** (arquivo temporário + `rename`), então o watcher do Traefik
   jamais lê um YAML pela metade.
-- **Backup automático** da versão anterior a cada gravação, em `data/.backups/`
-  (as 20 mais recentes).
+- **Backup automático** da versão anterior a cada gravação, em `.backups/` ao lado
+  do arquivo (as 20 mais recentes), com extensão `.yml.bak`: com
+  `providers.file.directory`, o Traefik lê a pasta recursivamente, e um backup
+  `.yml` viraria configuração ativa.
+- **Seu arquivo continua seu.** Os formulários editam o YAML como documento: só as
+  linhas da entrada tocada mudam. Comentários, linhas em branco, aspas, âncoras e
+  aliases, indentação e listas `[a, b]` do resto do arquivo ficam como estão. (A
+  única normalização: o espaço antes de um `# comentário` de fim de linha vira um.)
 - **Validação antes do disco**: nomes são checados contra `[a-zA-Z0-9._-]+` e o YAML
-  é parseado antes de qualquer escrita.
+  é parseado antes de qualquer escrita. Mapas estruturais vazios (`middlewares: {}`,
+  `tcp: {}`…) são removidos — o Traefik recusa o arquivo **inteiro** por causa de um.
+  Remover uma entrada que é âncora de um alias em outro ponto é recusado.
+- **Editor YAML sem atropelo**: se o arquivo mudou no disco depois que você abriu o
+  editor (edição por fora, outra aba), gravar é recusado e o painel pergunta se
+  você quer a versão do disco ou gravar a sua por cima.
 - **Só edita o que é seu.** O painel só oferece editar/remover para objetos que
   existem no arquivo que ele mesmo escreve. Objetos vindos do Docker — ou de outros
   arquivos que o file provider observa — aparecem marcados como somente leitura.
@@ -78,6 +97,15 @@ docker compose up -d --build
 
 O volume `dynamic` é a peça central: o painel escreve nele, o Traefik o observa
 (`watch: true`). Os dois containers precisam montar **o mesmo caminho**.
+
+O serviço `dynamic-init` roda uma vez antes dos outros: cria o `dynamic.yml` se não
+existir (um Traefik que sobe sem o arquivo desiste do file provider e não o pega
+depois) e entrega a pasta ao usuário do painel (uid 1001).
+
+**Já tem um `dynamic.yml` em produção?** Troque o volume nomeado por um bind mount
+da **pasta** dele nos três serviços — por exemplo `/etc/traefik/dynamic:/dynamic`. A
+pasta, não só o arquivo: o painel grava um temporário ao lado e renomeia, e guarda
+os backups ali.
 
 Ajuste o `Host()` do label `traefik-ui` no `docker-compose.yml` para o seu domínio.
 
@@ -104,7 +132,10 @@ TRAEFIK_MOCK=1 npm run dev
 | `TRAEFIK_API_USER` / `TRAEFIK_API_PASSWORD` | — | Se a API estiver atrás de basic auth |
 | `TRAEFIK_DYNAMIC_FILE` | `./data/dynamic.yml` | Arquivo YAML que o painel escreve |
 | `UI_PASSWORD` | — | Senha do painel. **Vazio desativa a autenticação** |
-| `UI_SESSION_SECRET` | — | Segredo do cookie. Gere com `openssl rand -hex 32` |
+| `UI_SESSION_SECRET` | aleatório por boot | Segredo do cookie. Gere com `openssl rand -hex 32`; sem ele, todo restart desloga |
+| `SERVER_PUBLIC_IP` | descoberto | IP(s) público(s) na Visão geral, separados por vírgula |
+| `SERVER_INTERNAL_IP` | interfaces de rede | IP(s) interno(s). **No Docker, informe** — o container só vê o próprio IP |
+| `PUBLIC_IP_LOOKUP` | `1` | `0` impede o painel de perguntar o IP público a `api.ipify.org` |
 
 Vazio em `TRAEFIK_API_URL` liga o modo mock automaticamente — o painel nunca fica
 numa tela em branco por falta de configuração.
@@ -123,6 +154,48 @@ providers:
     filename: /dynamic/dynamic.yml   # o MESMO arquivo do painel
     watch: true                      # sem isso, nada recarrega
 ```
+
+## Primeiro deploy: o que conferir
+
+O painel foi testado de ponta a ponta contra um Traefik v3.3.7 real (CRUD pelo
+painel, recarga do Traefik, tráfego, métricas, autenticação). **O caminho via
+Docker não foi** — valide estes pontos na primeira subida, de preferência numa
+máquina de teste:
+
+1. **`docker compose up -d --build` sobe os três serviços.** O `dynamic-init` deve
+   sair com código 0 (`docker compose ps -a`); `traefik` e `traefik-ui` só sobem
+   depois dele.
+2. **O Traefik carregou o file provider.** `docker compose logs traefik` não pode ter
+   `Cannot start the provider *file.Provider`.
+3. **O painel grava.** Crie um router de teste pela UI e confira que ele aparece no
+   Traefik e em `/dynamic/dynamic.yml`. Erro de permissão aqui = o `dynamic-init` não
+   acertou o dono da pasta (uid 1001).
+4. **A imagem não carrega segredos.** `docker compose exec traefik-ui ls -a /app` não
+   pode listar `.env` (o `.dockerignore` o exclui).
+5. **O botão Sair volta para o seu domínio.** O redirect para `/login` é montado a
+   partir da URL da requisição; atrás do Traefik, confira que ele não leva ao host
+   interno do container.
+6. **Login por https.** Em produção o cookie de sessão é `secure`: acessado por http
+   puro (ex.: `IP:3000`), o login parece funcionar mas a sessão não é guardada.
+7. **IP interno na página Servidor.** Dentro do container o painel só vê o próprio IP;
+   defina `SERVER_INTERNAL_IP` no `.env` com o IP da máquina.
+
+## Limitações conhecidas
+
+- **Uma réplica por arquivo.** A fila que serializa as gravações vive no processo.
+  Duas instâncias do painel gravando no mesmo `dynamic.yml` podem perder edições —
+  isso exigiria lock no disco.
+- **Limite de login depende do proxy.** O cliente é identificado pelo último valor de
+  `X-Forwarded-For`. Sem proxy na frente, todos contam como o mesmo cliente e 5 erros
+  de qualquer um bloqueiam o login de todos por 15 min.
+- **Formatação do YAML: quase intacta.** O espaço antes de um `# comentário` de fim de
+  linha vira um só. Numa entrada editada, um valor cuja estrutura muda (ex.: uma lista
+  que muda de tamanho) é recriado e perde os comentários dentro dele.
+- **Editar só no arquivo do painel.** Com `providers.file.directory`, o painel edita
+  um arquivo da pasta; o que vem dos outros aparece como somente leitura.
+- **IP público via serviço externo.** Sem `SERVER_PUBLIC_IP`, o painel consulta
+  `api.ipify.org` (cache de 10 min). `PUBLIC_IP_LOOKUP=0` desliga a consulta.
+- **Histórico de métricas em memória.** Ver [O histórico começa vazio](#o-histórico-começa-vazio).
 
 ## Sobre o build nesta máquina
 
@@ -200,17 +273,21 @@ src/
     api/
       auth/           login e logout
       config/         GET/PUT do YAML + CRUD por entrada
+      server/         endereços do servidor (IP público/interno)
       traefik/        proxy somente-leitura para a API do Traefik
   components/
     shell/            header, nav, footer, estado de erro
-    ui/               primitivos (botão, badge, tabela, modal, campos)
+    ui/               primitivos (botão, badge, tabela, modal, campos, CodeEditor)
     views/            telas com estado de cliente
     charts/           SVG à mão: área empilhada, linhas, espelhado, barras
   lib/
     traefik.ts        cliente da API REST
     prometheus.ts     parser do formato de exposição + quantis de histograma
     metrics.ts        amostrador em anel e derivação de taxas
-    config-store.ts   leitura/escrita atômica do file provider
-    auth.ts           sessão HMAC
+    config-store.ts   escrita atômica, em fila, editando o YAML como documento
+    auth.ts           sessão HMAC + limite de tentativas de login
+    request-guard.ts  barreira contra CSRF nas rotas que escrevem
+    router-links.ts   link do serviço a partir da regra do router
+    server-addresses.ts  IP público e interno da máquina
     mock.ts           dados de demonstração
 ```
