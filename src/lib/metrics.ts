@@ -1,4 +1,7 @@
 import "server-only";
+import { randomUUID } from "node:crypto";
+import { promises as fs } from "node:fs";
+import path from "node:path";
 import { bucketsOf, parsePrometheus, quantileFromBuckets, sumOf } from "./prometheus";
 import { mockDashboard } from "./metrics-mock";
 
@@ -9,11 +12,15 @@ import { mockDashboard } from "./metrics-mock";
  *
  * Consequência honesta: o histórico começa vazio e se preenche enquanto o
  * painel roda. Não existe retroativo — para isso é preciso um Prometheus de
- * verdade guardando os dados.
+ * verdade guardando os dados. Com METRICS_HISTORY_FILE, o anel vai para o
+ * disco a cada PERSIST_EVERY amostras e volta no boot: reiniciar o painel
+ * (deploy, restart) não zera mais os últimos 30 min.
  */
 
 const SAMPLE_INTERVAL_MS = 5_000;
 const RING_SIZE = 360; // 30 min a 5s
+const PERSIST_EVERY = 6; // grava a cada 30s: no pior caso, um restart perde isso
+const GAP_SECONDS = (3 * SAMPLE_INTERVAL_MS) / 1000;
 
 export interface StatusPoint {
   t: number;
@@ -88,6 +95,9 @@ interface SamplerState {
   timer: NodeJS.Timeout | null;
   lastError: string | null;
   started: boolean;
+  /** Amostras desde a última gravação em disco. */
+  sinceSave: number;
+  saving: boolean;
 }
 
 /* Sobrevive ao hot-reload do dev, que reavalia o módulo a cada edição. */
@@ -97,7 +107,89 @@ const state: SamplerState = (globalRef.__traefikSampler ??= {
   timer: null,
   lastError: null,
   started: false,
+  sinceSave: 0,
+  saving: false,
 });
+
+/* -------------------------------------------------------- histórico */
+
+function historyFile(): string | null {
+  const f = process.env.METRICS_HISTORY_FILE?.trim();
+  return f ? path.resolve(f) : null;
+}
+
+const HISTORY_VERSION = 1;
+
+/* JSON não tem Infinity, e o bucket `le="+Inf"` é chave de todo histograma. */
+type Buckets = [number | "+Inf", number][];
+const encodeBuckets = (m: Map<number, number>): Buckets =>
+  [...m].map(([le, v]) => [le === Number.POSITIVE_INFINITY ? "+Inf" : le, v]);
+const decodeBuckets = (b: Buckets): Map<number, number> =>
+  new Map(b.map(([le, v]) => [le === "+Inf" ? Number.POSITIVE_INFINITY : le, v]));
+
+interface StoredSnapshot extends Omit<Snapshot, "buckets" | "routers" | "routerBuckets"> {
+  buckets: Buckets;
+  routers: [string, { total: number; errors: number }][];
+  routerBuckets: [string, Buckets][];
+}
+
+function encode(s: Snapshot): StoredSnapshot {
+  return {
+    ...s,
+    buckets: encodeBuckets(s.buckets),
+    routers: [...s.routers],
+    routerBuckets: [...s.routerBuckets].map(([r, b]) => [r, encodeBuckets(b)]),
+  };
+}
+
+function decode(s: StoredSnapshot): Snapshot {
+  return {
+    ...s,
+    buckets: decodeBuckets(s.buckets),
+    routers: new Map(s.routers),
+    routerBuckets: new Map(s.routerBuckets.map(([r, b]) => [r, decodeBuckets(b)])),
+  };
+}
+
+/**
+ * Recarrega o anel gravado. Só o que ainda caberia na janela de 30 min
+ * volta; arquivo ausente, corrompido ou de outra versão é ignorado — o
+ * histórico é conveniência, nunca motivo para o painel não subir.
+ */
+async function loadHistory(): Promise<void> {
+  const file = historyFile();
+  if (!file) return;
+  try {
+    const data = JSON.parse(await fs.readFile(file, "utf8")) as { version?: number; ring?: StoredSnapshot[] };
+    if (data.version !== HISTORY_VERSION || !Array.isArray(data.ring)) return;
+    const oldest = Date.now() - RING_SIZE * SAMPLE_INTERVAL_MS;
+    const restored = data.ring.filter((s) => typeof s?.t === "number" && s.t >= oldest).map(decode);
+    /* Amostras que o timer já colheu antes da leitura terminar vêm depois. */
+    state.ring = [...restored, ...state.ring.filter((s) => s.t > (restored.at(-1)?.t ?? 0))].slice(-RING_SIZE);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+      console.warn(`[metrics] histórico ignorado (${file}): ${(err as Error).message}`);
+    }
+  }
+}
+
+/** Temp + rename, como o dynamic.yml: um boot nunca lê arquivo pela metade. */
+async function saveHistory(): Promise<void> {
+  const file = historyFile();
+  if (!file || state.saving) return;
+  state.saving = true;
+  const tmp = `${file}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    await fs.mkdir(path.dirname(file), { recursive: true });
+    await fs.writeFile(tmp, JSON.stringify({ version: HISTORY_VERSION, ring: state.ring.map(encode) }), "utf8");
+    await fs.rename(tmp, file);
+  } catch (err) {
+    await fs.rm(tmp, { force: true }).catch(() => undefined);
+    console.warn(`[metrics] não consegui gravar o histórico em ${file}: ${(err as Error).message}`);
+  } finally {
+    state.saving = false;
+  }
+}
 
 export function metricsUrl(): string {
   const explicit = process.env.TRAEFIK_METRICS_URL;
@@ -185,6 +277,11 @@ async function scrape(): Promise<void> {
     state.ring.push(snapshot);
     if (state.ring.length > RING_SIZE) state.ring.splice(0, state.ring.length - RING_SIZE);
     state.lastError = null;
+    state.sinceSave += 1;
+    if (state.sinceSave >= PERSIST_EVERY) {
+      state.sinceSave = 0;
+      void saveHistory();
+    }
   } catch (err) {
     state.lastError = (err as Error).message;
   }
@@ -194,7 +291,9 @@ async function scrape(): Promise<void> {
 export function ensureSampler(): void {
   if (state.started || isMock()) return;
   state.started = true;
-  void scrape();
+  /* Primeiro o histórico, depois a primeira raspagem: assim ela entra no
+     fim do anel recarregado, e a taxa sai do par certo. */
+  void loadHistory().then(() => scrape());
   state.timer = setInterval(() => void scrape(), SAMPLE_INTERVAL_MS);
   state.timer.unref?.();
 }
@@ -258,7 +357,11 @@ export function getDashboard(): DashboardData {
     const prev = state.ring[i - 1];
     const curr = state.ring[i];
     const dt = (curr.t - prev.t) / 1000;
-    if (dt <= 0) continue;
+    /* Buraco maior que três raspagens = painel fora do ar (restart, deploy)
+       entre as duas amostras. A diferença dos contadores é real, mas
+       dividida pelo buraco vira uma média que nunca existiu: melhor não
+       desenhar ponto nenhum ali. */
+    if (dt <= 0 || dt > GAP_SECONDS) continue;
 
     requests.push({
       t: curr.t,
@@ -284,9 +387,17 @@ export function getDashboard(): DashboardData {
   }
 
   /* Os totais do topo usam uma janela mais longa (até 1 min) para não
-     tremerem a cada poll de 5s. */
+     tremerem a cada poll de 5s — só sobre amostras contínuas: logo depois
+     de um restart do painel, a janela não atravessa o buraco. */
   const last = state.ring[state.ring.length - 1];
-  const baselineIdx = Math.max(0, state.ring.length - 13);
+  let baselineIdx = state.ring.length - 1;
+  while (
+    baselineIdx > Math.max(0, state.ring.length - 13) &&
+    (state.ring[baselineIdx].t - state.ring[baselineIdx - 1].t) / 1000 <= GAP_SECONDS
+  ) {
+    baselineIdx -= 1;
+  }
+  /* Uma amostra só depois do buraco: baseline = last, deltas zero, por uns 5s. */
   const baseline = state.ring[baselineIdx];
   const spanSeconds = (last.t - baseline.t) / 1000 || 1;
 

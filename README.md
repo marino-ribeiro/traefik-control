@@ -40,10 +40,14 @@ As métricas do Traefik são **contadores acumulados**: uma raspagem só diz o t
 desde o boot. Para ter taxa e série temporal, o painel guarda amostras a cada 5s num
 anel em memória (30 min) e deriva as taxas por diferença.
 
-Consequência honesta: ao subir, os gráficos começam vazios e se preenchem enquanto o
-painel roda. **Não há retroativo** — para histórico de verdade, use um Prometheus
-guardando os dados. O anel também vive no processo: reiniciar o painel zera a série,
-e com mais de uma réplica cada uma tem a sua.
+Consequência honesta: na primeira subida, os gráficos começam vazios e se preenchem
+enquanto o painel roda. **Não há retroativo** — para histórico de verdade, use um
+Prometheus guardando os dados. Com mais de uma réplica, cada uma tem o seu anel.
+
+Com `METRICS_HISTORY_FILE` (o `docker-compose.yml` já aponta para um volume), o anel
+vai para o disco a cada 30s e volta no boot: **reiniciar o painel não zera mais** os
+últimos 30 min. O tempo em que ele ficou fora fica como um buraco — sem ponto
+desenhado, porque a média do período parado seria um valor que nunca existiu.
 
 ## Segurança
 
@@ -151,6 +155,7 @@ TRAEFIK_MOCK=1 npm run dev
 | `SERVER_INTERNAL_IP` | interfaces de rede | IP(s) interno(s). **No Docker, informe** — o container só vê o próprio IP |
 | `PUBLIC_IP_LOOKUP` | `1` | `0` impede o painel de perguntar o IP público a `api.ipify.org` |
 | `FRAME_ANCESTORS` | — (só o próprio painel) | Origens que podem exibi-lo num `<iframe>`, ex.: `https://intranet.empresa.com.br` |
+| `METRICS_HISTORY_FILE` | — (só memória) | Arquivo onde o histórico de métricas é guardado para sobreviver a restart. Ex.: `/data/metrics-history.json` |
 | `UI_HOST` | `traefik.exemplo.com` | Só no compose: o `Host()` do router do painel no Traefik |
 
 Vazio em `TRAEFIK_API_URL` liga o modo mock automaticamente — o painel nunca fica
@@ -248,7 +253,7 @@ máquina de teste:
   um arquivo da pasta; o que vem dos outros aparece como somente leitura.
 - **IP público via serviço externo.** Sem `SERVER_PUBLIC_IP`, o painel consulta
   `api.ipify.org` (cache de 10 min). `PUBLIC_IP_LOOKUP=0` desliga a consulta.
-- **Histórico de métricas em memória.** Ver [O histórico começa vazio](#o-histórico-começa-vazio).
+- **Histórico de métricas: 30 min.** Em memória, ou em disco com `METRICS_HISTORY_FILE`. Ver [O histórico começa vazio](#o-histórico-começa-vazio).
 
 ## Sobre o build nesta máquina
 

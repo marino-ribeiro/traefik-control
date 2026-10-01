@@ -74,8 +74,12 @@ services:
       # Origens que podem embutir o painel num iframe (ex.: a intranet).
       # Vazio = só o próprio painel. Ver .env.example.
       FRAME_ANCESTORS: ${FRAME_ANCESTORS:-}
+      # Histórico de métricas sobrevive a restart do painel (últimos 30 min).
+      METRICS_HISTORY_FILE: /data/metrics-history.json
+      UI_PROTECTED: ${UI_PROTECTED:-}
     volumes:
       - dynamic:/dynamic
+      - ui-data:/data
     networks:
       - edge
     labels:
@@ -88,6 +92,7 @@ services:
 volumes:
   dynamic:
   letsencrypt:
+  ui-data:
 
 networks:
   edge:

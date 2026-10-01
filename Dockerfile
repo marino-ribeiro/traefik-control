@@ -23,6 +23,9 @@ ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
 RUN addgroup -g 1001 -S nodejs && adduser -u 1001 -S nextjs -G nodejs
+# Pasta do histórico de métricas (METRICS_HISTORY_FILE). Já nasce do usuário
+# do painel: um volume nomeado montado aqui herda o dono no primeiro uso.
+RUN mkdir -p /data && chown nextjs:nodejs /data
 
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
