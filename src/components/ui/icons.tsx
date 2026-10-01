@@ -21,6 +21,7 @@ import {
   Settings2,
   ShieldCheck,
   Signal,
+  Unplug,
   Sliders,
   XCircle,
   type LucideIcon,
@@ -67,6 +68,7 @@ export {
   Server,
   ShieldCheck,
   Signal,
+  Unplug,
   Sliders,
 };
 export type { LucideIcon };

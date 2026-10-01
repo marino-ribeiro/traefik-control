@@ -9,15 +9,13 @@ import { authDisabled, isAuthenticated } from "@/lib/auth";
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   if (!(await isAuthenticated())) redirect("/login");
 
-  const { snapshot, target } = await getSnapshot();
+  const { snapshot, target, error } = await getSnapshot();
+  /* Sem snapshot = a API não respondeu (o mock nunca falha). */
+  const connection = !snapshot ? "offline" : snapshot.mock ? "demo" : "live";
 
   return (
     <>
-      <Header
-        mock={snapshot?.mock ?? false}
-        target={target}
-        authed={!authDisabled()}
-      />
+      <Header connection={connection} target={target} error={error} authed={!authDisabled()} />
       <div className="fixed inset-x-0 top-header z-[90] lg:hidden">
         <MobileNav />
       </div>
