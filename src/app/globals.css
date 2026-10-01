@@ -67,6 +67,10 @@
 html {
   scroll-behavior: smooth;
   background: var(--color-ink);
+  /* O painel é só escuro: diz isso ao navegador, senão o que ele desenha
+     por conta própria — a lista aberta de um <select>, barras de rolagem —
+     sai no tema claro do sistema. */
+  color-scheme: dark;
   /* Reserva a calha da barra de rolagem, para a página não pular de lado
      quando o modal abaixo a esconde. */
   scrollbar-gutter: stable;
@@ -192,6 +196,12 @@ body::before {
 }
 
 @layer base {
+  /* As opções de um <select> aberto: mesma superfície dos painéis. */
+  option {
+    background: var(--color-card);
+    color: var(--color-fg);
+  }
+
   ::selection {
     background: var(--color-red);
     color: var(--color-fg);
