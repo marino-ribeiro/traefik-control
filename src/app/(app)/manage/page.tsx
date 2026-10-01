@@ -1,12 +1,17 @@
 import { PageHeader, Mono, Notice } from "@/components/ui/primitives";
-import { DYNAMIC_FILE, lockedNames, readConfig, readConfigRaw } from "@/lib/config-store";
+import { DYNAMIC_FILE, listBackups, lockedNames, readConfig, readConfigRaw } from "@/lib/config-store";
 import { getSnapshot } from "@/lib/snapshot";
 import { ManageView } from "@/components/views/ManageView";
 
 export const dynamic = "force-dynamic";
 
 export default async function ManagePage() {
-  const [config, raw, { snapshot }] = await Promise.all([readConfig(), readConfigRaw(), getSnapshot()]);
+  const [config, raw, { snapshot }, backups] = await Promise.all([
+    readConfig(),
+    readConfigRaw(),
+    getSnapshot(),
+    listBackups(),
+  ]);
 
   const entryPoints = (snapshot?.entryPoints ?? []).map((e) => e.name);
   const knownServices = [
@@ -45,6 +50,7 @@ export default async function ManagePage() {
         knownServices={knownServices}
         knownMiddlewares={knownMiddlewares}
         locked={lockedNames()}
+        backups={backups.filter((b) => b.endsWith(".yml.bak"))}
       />
     </>
   );

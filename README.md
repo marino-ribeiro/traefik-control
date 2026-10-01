@@ -19,7 +19,7 @@ YAML no servidor na unha.
 | **Services** | Servidores do load balancer com estado individual, health check e sessão fixa. **CRUD na própria tela** |
 | **Middlewares** | Tipo, configuração completa e onde cada um é usado. **CRUD na própria tela** |
 | **Entrypoints** | Portas em escuta, redirecionamentos e cert resolver (somente leitura — vêm da config estática) |
-| **Gerenciar** | A mesma edição, organizada por tipo, mais um editor de YAML bruto do arquivo inteiro — com números de linha, guias de indentação e Tab/Enter de IDE (Ctrl+M devolve o Tab à navegação) |
+| **Gerenciar** | A mesma edição, organizada por tipo, a lista de backups com comparação e restauração, e um editor de YAML bruto do arquivo inteiro — com números de linha, guias de indentação e Tab/Enter de IDE (Ctrl+M devolve o Tab à navegação) |
 | **Servidor** | Atalho ao lado do selo live/demo: IP público (A/AAAA) e interno para apontamento DNS, com botão de copiar; versão e uptime do Traefik; arquivo, métricas e autenticação em uso |
 
 ## De onde vêm os dados
@@ -75,6 +75,11 @@ Este painel reescreve o roteamento do seu Traefik. Ele foi construído assumindo
   é parseado antes de qualquer escrita. Mapas estruturais vazios (`middlewares: {}`,
   `tcp: {}`…) são removidos — o Traefik recusa o arquivo **inteiro** por causa de um.
   Remover uma entrada que é âncora de um alias em outro ponto é recusado.
+- **Restaurar backup pela tela.** Em Gerenciar → Backups, cada versão mostra a
+  comparação com o arquivo atual (o que volta, o que sai) antes de restaurar. A
+  restauração passa pelas mesmas validações do editor bruto, é recusada se o
+  arquivo mudou desde a comparação ou se alteraria uma entrada protegida, e a
+  versão atual vira backup — restaurar também se desfaz.
 - **Editor YAML sem atropelo**: se o arquivo mudou no disco depois que você abriu o
   editor (edição por fora, outra aba), gravar é recusado e o painel pergunta se
   você quer a versão do disco ou gravar a sua por cima.

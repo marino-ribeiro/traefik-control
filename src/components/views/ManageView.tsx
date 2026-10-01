@@ -6,6 +6,7 @@ import { Badge, Button, EmptyState, Mono, Notice, Panel, cx } from "@/components
 import { Modal } from "@/components/ui/Modal";
 import { CodeEditor } from "@/components/ui/CodeEditor";
 import { ReadOnlyMark } from "./ResourceEditor";
+import { BackupsPanel } from "./BackupsPanel";
 import {
   MiddlewareForm,
   RouterForm,
@@ -15,13 +16,14 @@ import {
 } from "./manage-forms";
 import type { DynamicConfig, Kind, Section } from "@/lib/config-store";
 
-type Tab = "routers" | "services" | "middlewares" | "yaml";
+type Tab = "routers" | "services" | "middlewares" | "yaml" | "backups";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "routers", label: "Routers" },
   { key: "services", label: "Services" },
   { key: "middlewares", label: "Middlewares" },
   { key: "yaml", label: "YAML bruto" },
+  { key: "backups", label: "Backups" },
 ];
 
 interface Editing {
@@ -36,6 +38,7 @@ export function ManageView({
   knownServices,
   knownMiddlewares,
   locked,
+  backups,
 }: {
   config: DynamicConfig;
   raw: string;
@@ -44,6 +47,8 @@ export function ManageView({
   knownMiddlewares: string[];
   /** Protegidos por UI_PROTECTED: sem editar/remover aqui. */
   locked: Record<Section, Record<Kind, string[]>>;
+  /** Nomes em `.backups/`, do mais recente para o mais antigo. */
+  backups: string[];
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("routers");
@@ -53,7 +58,7 @@ export function ManageView({
   const [flash, setFlash] = useState<{ tone: "info" | "error"; text: string } | null>(null);
   const [, startTransition] = useTransition();
 
-  const kind = (tab === "yaml" ? "routers" : tab) as Kind;
+  const kind = (tab === "yaml" || tab === "backups" ? "routers" : tab) as Kind;
   const bucket = ((config[section] as Record<string, Record<string, unknown>> | undefined)?.[kind] ??
     {}) as Record<string, Record<string, unknown>>;
   const names = Object.keys(bucket).sort();
@@ -130,7 +135,7 @@ export function ManageView({
           ))}
         </div>
 
-        {tab !== "yaml" && (
+        {tab !== "yaml" && tab !== "backups" && (
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex gap-2">
               {sectionsFor.map((s) => (
@@ -162,7 +167,16 @@ export function ManageView({
         </div>
       )}
 
-      {tab === "yaml" ? (
+      {tab === "backups" ? (
+        <BackupsPanel
+          backups={backups}
+          current={raw}
+          onRestored={(t) => {
+            setFlash({ tone: "info", text: t });
+            refresh();
+          }}
+        />
+      ) : tab === "yaml" ? (
         <YamlEditor raw={raw} onSaved={(t) => { setFlash({ tone: "info", text: t }); refresh(); }} />
       ) : (
         <Panel>

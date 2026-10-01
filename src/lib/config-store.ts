@@ -500,6 +500,57 @@ export function lockedNames(): Record<Section, Record<Kind, string[]>> {
   return out;
 }
 
+/* Só um nome de arquivo, sem barra nem `..`: o nome vem do cliente e não
+   pode apontar para fora de `.backups/`. */
+const BACKUP_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*\.yml\.bak$/;
+
+export async function readBackup(name: string): Promise<string> {
+  if (!BACKUP_NAME_RE.test(name) || name.includes("..")) throw new ConfigError(`nome de backup inválido: ${name}`);
+  try {
+    return await fs.readFile(path.join(BACKUP_DIR, name), "utf8");
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+      throw new ConfigError(`o backup "${name}" não existe mais (os mais antigos são descartados)`, 404);
+    }
+    throw new ConfigError(`não consegui ler o backup: ${(err as Error).message}`, 500);
+  }
+}
+
+/**
+ * Volta o arquivo para um backup. Passa pelas mesmas barreiras do editor
+ * bruto — YAML válido, sem mapa estrutural vazio, protegidas intactas,
+ * `base` igual ao disco — e grava pela escrita atômica, que guarda a versão
+ * atual como backup: restaurar também se desfaz.
+ */
+export function restoreBackup(name: string, base: string): Promise<void> {
+  return serialized(async () => {
+    const raw = await readBackup(name);
+    let parsed: unknown;
+    try {
+      parsed = parse(raw);
+    } catch (err) {
+      throw new ConfigError(`o backup tem YAML inválido: ${(err as Error).message}`, 422);
+    }
+    if (parsed != null && (typeof parsed !== "object" || Array.isArray(parsed))) {
+      throw new ConfigError("o backup não contém um mapa YAML na raiz", 422);
+    }
+    const empty = parsed == null ? [] : emptyStructuralMaps(parsed as DynamicConfig);
+    if (empty.length > 0) {
+      throw new ConfigError(`o backup tem mapa vazio em ${empty.join(", ")}, que o Traefik recusaria`, 422);
+    }
+
+    const current = await readConfigRaw();
+    if (current !== base) {
+      throw new ConfigError("o arquivo mudou desde que você abriu a comparação — recarregue a página", 409, {
+        current,
+      });
+    }
+    const before = await readConfig().catch(() => undefined);
+    if (before !== undefined) assertProtectedUnchanged(before, (parsed ?? null) as DynamicConfig | null);
+    await atomicWrite(raw);
+  });
+}
+
 export async function listBackups(): Promise<string[]> {
   try {
     return (await fs.readdir(BACKUP_DIR))
