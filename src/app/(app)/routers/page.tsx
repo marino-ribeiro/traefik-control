@@ -6,7 +6,12 @@ import { RoutersView } from "@/components/views/RoutersView";
 
 export const dynamic = "force-dynamic";
 
-export default async function RoutersPage() {
+export default async function RoutersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const { q } = await searchParams;
   const [{ snapshot, error, target }, config, owned] = await Promise.all([
     getSnapshot(),
     readConfig(),
@@ -54,6 +59,7 @@ export default async function RoutersPage() {
         entryPointInfo={snapshot.entryPoints}
         knownServices={knownServices}
         knownMiddlewares={knownMiddlewares}
+        initialQuery={typeof q === "string" ? q : undefined}
       />
     </>
   );

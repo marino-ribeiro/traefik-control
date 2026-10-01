@@ -26,6 +26,7 @@ export function RoutersView({
   entryPointInfo,
   knownServices,
   knownMiddlewares,
+  initialQuery,
 }: {
   routers: Record<Protocol, TraefikRouter[]>;
   /** Nomes (sem @provider) que vivem no arquivo deste painel, por protocolo. */
@@ -37,6 +38,8 @@ export function RoutersView({
   entryPointInfo: TraefikEntryPoint[];
   knownServices: string[];
   knownMiddlewares: string[];
+  /** `?q=` da URL — o ranking de Métricas linka para cá com o nome do router. */
+  initialQuery?: string;
 }) {
   const nav = useNextRouter();
   const [proto, setProto] = useState<Protocol>("http");
@@ -196,6 +199,7 @@ export function RoutersView({
           rows={rows}
           columns={columns}
           rowKey={(r) => r.name}
+          initialQuery={initialQuery}
           searchable={(r) => [r.name, r.rule, r.service, r.provider, ...(r.entryPoints ?? [])]}
           filters={[
             { key: "provider", label: "Provider", value: (r) => r.provider },

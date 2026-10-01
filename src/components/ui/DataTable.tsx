@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 import { cx, EmptyState } from "./primitives";
+import { Pager, usePageSize } from "./Pagination";
 import type { LucideIcon } from "./icons";
 
 export interface Column<T> {
@@ -33,6 +34,8 @@ interface Props<T> {
   emptyTitle?: string;
   emptyHint?: string;
   emptyIcon?: LucideIcon;
+  /** Busca já preenchida ao abrir — ex.: `?q=` vindo de um link. */
+  initialQuery?: string;
 }
 
 export function DataTable<T>({
@@ -45,11 +48,36 @@ export function DataTable<T>({
   emptyTitle = "Nada por aqui",
   emptyHint,
   emptyIcon,
+  initialQuery = "",
 }: Props<T>) {
-  const [query, setQuery] = useState("");
-  const [active, setActive] = useState<Record<string, string>>({});
-  const [sort, setSort] = useState<{ key: string; dir: 1 | -1 } | null>(null);
-  const [open, setOpen] = useState<string | null>(null);
+  const [query, setQueryRaw] = useState(initialQuery);
+  const [active, setActiveRaw] = useState<Record<string, string>>({});
+  const [sort, setSortRaw] = useState<{ key: string; dir: 1 | -1 } | null>(null);
+  /* Veio de um link apontando para uma linha exata: já abre o detalhe dela. */
+  const [open, setOpen] = useState<string | null>(() =>
+    initialQuery && rows.some((r) => rowKey(r) === initialQuery) ? initialQuery : null,
+  );
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSizeStored] = usePageSize();
+
+  /* Mudar busca, filtro, ordem ou tamanho volta para a página 1: ficar na
+     página 4 de um resultado que agora tem uma só mostraria tela vazia. */
+  const setQuery = (q: string) => {
+    setQueryRaw(q);
+    setPage(1);
+  };
+  const setActive: typeof setActiveRaw = (v) => {
+    setActiveRaw(v);
+    setPage(1);
+  };
+  const setSort: typeof setSortRaw = (v) => {
+    setSortRaw(v);
+    setPage(1);
+  };
+  const setPageSize = (n: number) => {
+    setPageSizeStored(n);
+    setPage(1);
+  };
 
   const options = useMemo(() => {
     const map: Record<string, string[]> = {};
@@ -90,6 +118,12 @@ export function DataTable<T>({
     }
     return out;
   }, [rows, filters, active, query, searchable, sort, columns]);
+
+  const pageCount = Math.max(1, Math.ceil(visible.length / pageSize));
+  /* As linhas mudam por fora (refresh depois de remover uma): não fica
+     preso numa página que deixou de existir. */
+  const current = Math.min(page, pageCount);
+  const pageRows = visible.slice((current - 1) * pageSize, current * pageSize);
 
   const toggleSort = (key: string) =>
     setSort((prev) => (prev?.key === key ? (prev.dir === 1 ? { key, dir: -1 } : null) : { key, dir: 1 }));
@@ -174,7 +208,7 @@ export function DataTable<T>({
               </tr>
             </thead>
             <tbody>
-              {visible.map((row) => {
+              {pageRows.map((row) => {
                 const key = rowKey(row);
                 const isOpen = open === key;
                 return (
@@ -191,6 +225,17 @@ export function DataTable<T>({
             </tbody>
           </table>
         </div>
+      )}
+
+      {visible.length > 0 && (
+        <Pager
+          page={current}
+          pageCount={pageCount}
+          pageSize={pageSize}
+          total={visible.length}
+          onPage={setPage}
+          onPageSize={setPageSize}
+        />
       )}
     </div>
   );
