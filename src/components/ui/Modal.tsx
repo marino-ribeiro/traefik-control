@@ -41,7 +41,9 @@ export function Modal({
         if (e.target === ref.current) onClose();
       }}
       style={{ maxWidth: width }}
-      className="glass w-[92vw] rounded-panel p-0 text-fg shadow-lift backdrop:bg-black/70 backdrop:backdrop-blur-md"
+      /* m-auto: o preflight do Tailwind zera a margem, e é ela que centraliza
+         o <dialog> modal (o navegador já o posiciona com inset: 0). */
+      className="glass m-auto w-[92vw] rounded-panel p-0 text-fg shadow-lift backdrop:bg-black/70 backdrop:backdrop-blur-md"
     >
       <div className="flex items-start justify-between gap-4 border-b border-white/8 px-6 py-4">
         <div>
@@ -57,7 +59,7 @@ export function Modal({
           ×
         </button>
       </div>
-      <div className="scroll-slim max-h-[70vh] overflow-y-auto px-6 py-6">{children}</div>
+      <div className="scroll-slim max-h-[70vh] overflow-y-auto overscroll-contain px-6 py-6">{children}</div>
     </dialog>
   );
 }

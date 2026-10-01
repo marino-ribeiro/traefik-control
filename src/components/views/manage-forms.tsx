@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Badge, Button, Field, Input, Notice, Select, Textarea, cx } from "@/components/ui/primitives";
+import { Badge, Button, Checkbox, Field, Input, Notice, Select, Textarea, cx } from "@/components/ui/primitives";
+import { CodeEditor } from "@/components/ui/CodeEditor";
 
 /* ================================================================ helpers */
 
@@ -26,7 +27,7 @@ function ChipPicker({
 }) {
   if (options.length === 0) return <p className="text-[13px] text-muted/70">{emptyHint}</p>;
   return (
-    <div className="flex flex-wrap gap-px">
+    <div className="flex flex-wrap gap-2">
       {options.map((o) => {
         const on = selected.includes(o);
         return (
@@ -169,13 +170,8 @@ export function RouterForm({
         </Field>
 
         <Field label="TLS">
-          <label className="flex items-center gap-3 rounded-control border border-white/10 bg-black/40 px-3 py-2.5">
-            <input
-              type="checkbox"
-              checked={tlsOn}
-              onChange={(e) => setTlsOn(e.target.checked)}
-              className="size-4 accent-[#ff3b5c]"
-            />
+          <label className="flex cursor-pointer items-center gap-3 rounded-control border border-white/10 bg-black/40 px-3 py-2.5 transition-colors duration-200 ease-geist hover:border-white/20">
+            <Checkbox checked={tlsOn} onChange={(e) => setTlsOn(e.target.checked)} />
             <span className="text-[14px]">Habilitar TLS</span>
           </label>
           {tlsOn && (
@@ -276,13 +272,8 @@ export function ServiceForm({
 
       {isHttp && (
         <>
-          <label className="flex items-center gap-3 rounded-control border border-white/10 bg-black/40 px-3 py-2.5">
-            <input
-              type="checkbox"
-              checked={passHost}
-              onChange={(e) => setPassHost(e.target.checked)}
-              className="size-4 accent-[#ff3b5c]"
-            />
+          <label className="flex cursor-pointer items-center gap-3 rounded-control border border-white/10 bg-black/40 px-3 py-2.5 transition-colors duration-200 ease-geist hover:border-white/20">
+            <Checkbox checked={passHost} onChange={(e) => setPassHost(e.target.checked)} />
             <span className="text-[14px]">Repassar o Host header original</span>
           </label>
 
@@ -380,7 +371,13 @@ export function MiddlewareForm({
       </Field>
 
       <Field label="Configuração (JSON)" hint="Convertida para YAML na gravação.">
-        <Textarea rows={9} value={config} onChange={(e) => setConfig(e.target.value)} spellCheck={false} />
+        <CodeEditor
+          language="json"
+          rows={12}
+          value={config}
+          onChange={setConfig}
+          ariaLabel="Configuração do middleware em JSON"
+        />
       </Field>
 
       {error && <Notice tone="error">{error}</Notice>}

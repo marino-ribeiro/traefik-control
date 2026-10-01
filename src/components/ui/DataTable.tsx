@@ -99,7 +99,7 @@ export function DataTable<T>({
   return (
     <div>
       {hasControls && (
-        <div className="flex flex-wrap items-center gap-3 border-b border-white/8 px-6 py-4">
+        <div className="flex flex-wrap items-center gap-x-8 gap-y-3 border-b border-white/8 px-6 py-4">
           {searchable && (
             <input
               type="search"
@@ -111,9 +111,9 @@ export function DataTable<T>({
             />
           )}
           {filters.map((f) => (
-            <div key={f.key} className="flex items-center gap-2">
+            <div key={f.key} className="flex items-center gap-3">
               <span className="label-caps">{f.label}</span>
-              <div className="flex flex-wrap gap-px">
+              <div className="flex flex-wrap gap-2">
                 <FilterChip
                   active={!active[f.key]}
                   onClick={() => setActive((s) => ({ ...s, [f.key]: "" }))}

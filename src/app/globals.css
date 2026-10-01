@@ -67,6 +67,15 @@
 html {
   scroll-behavior: smooth;
   background: var(--color-ink);
+  /* Reserva a calha da barra de rolagem, para a página não pular de lado
+     quando o modal abaixo a esconde. */
+  scrollbar-gutter: stable;
+}
+
+/* O <dialog> modal bloqueia clique fora dele, mas não a rolagem: sem isto a
+   página de trás continua rolando com o modal aberto. */
+html:has(dialog:modal) {
+  overflow: hidden;
 }
 
 body {
@@ -97,10 +106,15 @@ body::before {
 
 /* A receita macOS: translucidez + blur + saturação, e o realce interno de
    1px no topo que simula a luz batendo na quina do painel. */
+
+/* Ordem importa: o prefixo ANTES da propriedade padrão. Na ordem inversa o
+   otimizador de CSS do Tailwind v4 trata a -webkit- como sobrescrita e
+   descarta a padrão — Chrome e Firefox, que só leem a padrão, ficavam sem
+   blur nenhum (o header deixava a página aparecer nítida por trás). */
 @utility glass {
   background: rgba(255, 255, 255, 0.045);
-  backdrop-filter: blur(24px) saturate(180%);
   -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
   border: 1px solid rgba(255, 255, 255, 0.085);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.07),
@@ -109,16 +123,16 @@ body::before {
 
 @utility glass-tile {
   background: rgba(255, 255, 255, 0.03);
-  backdrop-filter: blur(20px) saturate(160%);
   -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: blur(20px) saturate(160%);
   border: 1px solid rgba(255, 255, 255, 0.07);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 @utility glass-bar {
-  background: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(28px) saturate(180%);
+  background: rgba(0, 0, 0, 0.7);
   -webkit-backdrop-filter: blur(28px) saturate(180%);
+  backdrop-filter: blur(28px) saturate(180%);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 

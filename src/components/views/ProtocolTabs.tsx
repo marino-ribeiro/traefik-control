@@ -15,7 +15,7 @@ export function ProtocolTabs({
   options: { key: string; label: string }[];
 }) {
   return (
-    <div role="tablist" aria-label="Protocolo" className="flex gap-px">
+    <div role="tablist" aria-label="Protocolo" className="flex gap-2">
       {options.map((o) => {
         const active = value === o.key;
         return (

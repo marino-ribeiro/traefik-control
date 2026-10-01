@@ -1,4 +1,5 @@
 import type { ComponentProps, ReactNode } from "react";
+import { Check } from "lucide-react";
 import type { ResourceStatus } from "@/lib/types";
 import { STATUS_ICON, type LucideIcon } from "./icons";
 
@@ -265,6 +266,32 @@ export function Select({ className, children, ...props }: ComponentProps<"select
     <select className={cx(CONTROL, "appearance-none pr-8", className)} {...props}>
       {children}
     </select>
+  );
+}
+
+/**
+ * Checkbox desenhada à mão: `accent-color` só pinta o estado marcado, e a
+ * caixa desmarcada nativa fica branca sobre o fundo escuro.
+ */
+export function Checkbox({ className, ...props }: Omit<ComponentProps<"input">, "type">) {
+  return (
+    <span className={cx("relative inline-flex size-[18px] shrink-0", className)}>
+      <input
+        type="checkbox"
+        className={
+          "peer size-full cursor-pointer appearance-none rounded-[5px] border border-white/20 bg-white/[0.04] " +
+          "transition-[background-color,border-color,box-shadow] duration-200 ease-geist " +
+          "hover:border-white/35 checked:border-red checked:bg-red checked:hover:border-orange checked:hover:bg-orange " +
+          "focus-visible:shadow-red focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+        }
+        {...props}
+      />
+      <Check
+        aria-hidden
+        strokeWidth={3.5}
+        className="pointer-events-none absolute inset-0 m-auto size-3 text-white opacity-0 transition-opacity duration-150 peer-checked:opacity-100"
+      />
+    </span>
   );
 }
 

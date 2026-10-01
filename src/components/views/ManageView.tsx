@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Badge, Button, EmptyState, Mono, Notice, Panel, cx } from "@/components/ui/primitives";
 import { Modal } from "@/components/ui/Modal";
-import { Textarea } from "@/components/ui/primitives";
+import { CodeEditor } from "@/components/ui/CodeEditor";
 import {
   MiddlewareForm,
   RouterForm,
@@ -102,7 +102,7 @@ export function ManageView({
   return (
     <>
       <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex gap-px" role="tablist" aria-label="Tipo de objeto">
+        <div className="flex gap-2" role="tablist" aria-label="Tipo de objeto">
           {TABS.map((t) => (
             <button
               key={t.key}
@@ -127,7 +127,7 @@ export function ManageView({
 
         {tab !== "yaml" && (
           <div className="flex flex-wrap items-center gap-3">
-            <div className="flex gap-px">
+            <div className="flex gap-2">
               {sectionsFor.map((s) => (
                 <button
                   key={s}
@@ -185,7 +185,7 @@ export function ManageView({
                       {summarize(kind, bucket[name])}
                     </p>
                   </div>
-                  <div className="flex shrink-0 gap-px">
+                  <div className="flex shrink-0 gap-2">
                     <Button
                       variant="ghost"
                       className="px-4 py-2"
@@ -259,28 +259,59 @@ function summarize(kind: Kind, value: Record<string, unknown> | undefined): stri
 }
 
 function YamlEditor({ raw, onSaved }: { raw: string; onSaved: (text: string) => void }) {
+  /* `base` = a versão do disco sobre a qual o texto está sendo editado. É ela
+     que vai junto na gravação: se o arquivo mudou por fora, o servidor recusa
+     em vez de apagar a mudança alheia. */
+  const [base, setBase] = useState(raw);
   const [text, setText] = useState(raw);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const dirty = text !== raw;
+  /* Versão atual do disco, quando a gravação deu conflito. */
+  const [conflict, setConflict] = useState<string | null>(null);
+  const dirty = text !== base;
 
-  async function save() {
+  /* Recarregou a página (ou gravou) e o disco mudou: sem edição pendente,
+     acompanha o disco; com edição pendente, mantém o texto e deixa o
+     servidor acusar o conflito na hora de gravar. */
+  const [seenRaw, setSeenRaw] = useState(raw);
+  if (raw !== seenRaw) {
+    setSeenRaw(raw);
+    if (!dirty) {
+      setBase(raw);
+      setText(raw);
+    }
+  }
+
+  async function save(over?: string) {
     setBusy(true);
     setError(null);
     try {
       const res = await fetch("/api/config", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ raw: text }),
+        body: JSON.stringify({ raw: text, base: over ?? base }),
       });
-      const body = (await res.json()) as { error?: string };
+      const body = (await res.json()) as { error?: string; current?: string };
+      if (res.status === 409 && typeof body.current === "string") {
+        setConflict(body.current);
+        return;
+      }
       if (!res.ok) throw new Error(body.error ?? `falha ${res.status}`);
+      setConflict(null);
+      setBase(text);
       onSaved("Arquivo gravado. O Traefik recarrega em instantes.");
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setBusy(false);
     }
+  }
+
+  function loadDisk() {
+    if (conflict === null) return;
+    setBase(conflict);
+    setText(conflict);
+    setConflict(null);
   }
 
   return (
@@ -290,23 +321,44 @@ function YamlEditor({ raw, onSaved }: { raw: string; onSaved: (text: string) => 
       action={
         <div className="flex items-center gap-3">
           {dirty && <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-warn">alterado</span>}
-          <Button variant="ghost" className="px-4 py-2" onClick={() => setText(raw)} disabled={!dirty || busy}>
+          <Button variant="ghost" className="px-4 py-2" onClick={() => setText(base)} disabled={!dirty || busy}>
             Descartar
           </Button>
-          <Button className="px-5 py-2.5" onClick={save} disabled={!dirty || busy}>
+          <Button className="px-5 py-2.5" onClick={() => void save()} disabled={!dirty || busy || conflict !== null}>
             {busy ? "Gravando…" : "Gravar"}
           </Button>
         </div>
       }
     >
       <div className="px-6 py-6">
-        <Textarea
+        <CodeEditor
+          language="yaml"
           rows={26}
           value={text}
-          onChange={(e) => setText(e.target.value)}
-          spellCheck={false}
+          onChange={setText}
+          ariaLabel="Conteúdo do dynamic.yml"
           placeholder={"http:\n  routers:\n    exemplo:\n      rule: Host(`app.exemplo.com`)\n      service: exemplo"}
         />
+        {conflict !== null && (
+          <div className="mt-4 space-y-3">
+            <Notice tone="warn">
+              O arquivo mudou no disco desde que você abriu o editor — uma edição feita por fora ou em outra aba.
+              Gravar agora apagaria essa mudança. Escolha o que fazer:
+            </Notice>
+            <div className="flex flex-wrap gap-3">
+              <Button variant="ghost" className="px-4 py-2" onClick={loadDisk} disabled={busy}>
+                Usar a versão do disco
+              </Button>
+              <Button variant="danger" className="px-4 py-2" onClick={() => void save(conflict)} disabled={busy}>
+                Gravar a minha por cima
+              </Button>
+            </div>
+            <p className="text-[12px] text-muted">
+              &ldquo;Usar a versão do disco&rdquo; descarta o que você digitou — copie antes o que quiser manter.
+              &ldquo;Gravar por cima&rdquo; substitui a versão do disco, que fica salva em backup.
+            </p>
+          </div>
+        )}
         {error && (
           <div className="mt-4">
             <Notice tone="error">{error}</Notice>

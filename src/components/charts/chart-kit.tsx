@@ -246,9 +246,11 @@ export function Tooltip({
 }) {
   /* Vira de lado perto da borda direita para não sair da moldura. */
   const flip = x > width - 150;
+  /* Opaco de propósito: o vidro translúcido deixava as séries do gráfico
+     aparecerem atrás dos números. Mantém o realce de 1px no topo. */
   return (
     <div
-      className="glass pointer-events-none absolute top-2 z-10 min-w-[132px] rounded-control px-3 py-2"
+      className="pointer-events-none absolute top-2 z-10 min-w-[132px] rounded-control border border-line-strong bg-surface px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.07),var(--shadow-lift)]"
       style={flip ? { right: width - x + 10 } : { left: x + 10 }}
     >
       {children}
