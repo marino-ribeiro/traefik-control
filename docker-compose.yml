@@ -5,12 +5,38 @@
 #
 # O volume `dynamic` é a peça central: o painel ESCREVE nele e o
 # Traefik o OBSERVA (`watch: true`), então salvar na UI recarrega o Traefik.
+#
+# Já tem um dynamic.yml em produção? Troque o volume nomeado por um bind
+# mount da pasta dele, NOS DOIS serviços e no init, por exemplo:
+#   - /etc/traefik/dynamic:/dynamic
+# A pasta inteira, não só o arquivo: o painel grava num temporário ao lado e
+# renomeia (escrita atômica) e guarda backups em /dynamic/.backups. O init
+# abaixo garante dono 1001 (o usuário do painel) na pasta montada.
 
 services:
+  # Roda uma vez, antes dos outros dois, e sai:
+  #  - cria o dynamic.yml se não existir: o Traefik que sobe sem o arquivo
+  #    desiste do file provider ("Cannot start the provider") e NÃO o
+  #    pega depois, mesmo quando o painel grava (testado no v3.3.7);
+  #  - entrega a pasta ao usuário do painel (uid 1001, ver Dockerfile): um
+  #    volume novo nasce do root, e o painel não conseguiria gravar.
+  dynamic-init:
+    image: busybox:1.36
+    command:
+      - sh
+      - -c
+      - mkdir -p /dynamic/.backups && touch /dynamic/dynamic.yml && chown -R 1001:1001 /dynamic
+    volumes:
+      - dynamic:/dynamic
+    restart: "no"
+
   traefik:
     image: traefik:v3.3
     container_name: traefik
     restart: unless-stopped
+    depends_on:
+      dynamic-init:
+        condition: service_completed_successfully
     ports:
       - "80:80"
       - "443:443"
@@ -29,7 +55,10 @@ services:
     container_name: traefik-ui
     restart: unless-stopped
     depends_on:
-      - traefik
+      dynamic-init:
+        condition: service_completed_successfully
+      traefik:
+        condition: service_started
     environment:
       TRAEFIK_API_URL: http://traefik:8080
       TRAEFIK_METRICS_URL: http://traefik:8080/metrics
@@ -37,6 +66,11 @@ services:
       TRAEFIK_MOCK: "0"
       UI_PASSWORD: ${UI_PASSWORD:?defina UI_PASSWORD no .env}
       UI_SESSION_SECRET: ${UI_SESSION_SECRET:?defina UI_SESSION_SECRET no .env}
+      # Endereços mostrados na Visão geral (ver .env.example). Dentro do
+      # container o painel só enxerga o próprio IP: o da máquina vem daqui.
+      SERVER_PUBLIC_IP: ${SERVER_PUBLIC_IP:-}
+      SERVER_INTERNAL_IP: ${SERVER_INTERNAL_IP:-}
+      PUBLIC_IP_LOOKUP: ${PUBLIC_IP_LOOKUP:-1}
     volumes:
       - dynamic:/dynamic
     networks:

@@ -1,0 +1,28 @@
+# O que NÃO entra no contexto de build da imagem.
+
+# Segredos. Sem isto, o `COPY . .` levava o .env para o builder, o build do
+# Next o copiava para .next/standalone e a imagem final saía com /app/.env —
+# senha e segredo de sessão legíveis por quem tiver a imagem. No compose as
+# variáveis chegam pelo `environment:`; a imagem não precisa do arquivo.
+.env
+.env.*
+!.env.example
+
+# Gerados ou reinstalados no build.
+node_modules
+.next
+*.tsbuildinfo
+next-env.d.ts
+
+# Estado de runtime: backups do painel não pertencem à imagem.
+data/.backups
+
+# Irrelevantes para a imagem.
+.git
+.gitignore
+.dockerignore
+Dockerfile
+docker-compose.yml
+README.md
+AGENTS.md
+CLAUDE.md
