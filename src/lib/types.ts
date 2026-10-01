@@ -38,6 +38,8 @@ export interface TraefikService {
     passHostHeader?: boolean;
     sticky?: { cookie?: { name?: string; secure?: boolean; httpOnly?: boolean } };
     healthCheck?: { path?: string; interval?: string; timeout?: string };
+    /** Nome com @provider, ex.: `firewall-transport@file`. */
+    serversTransport?: string;
   };
   weighted?: { services?: { name: string; weight?: number }[] };
   mirroring?: { service?: string; mirrors?: { name: string; percent?: number }[] };

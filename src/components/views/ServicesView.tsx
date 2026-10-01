@@ -2,12 +2,12 @@
 
 import { useRouter as useNextRouter } from "next/navigation";
 import { useState } from "react";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { LockOpen, Pencil, Plus, Trash2 } from "lucide-react";
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { Badge, Button, IconButton, Mono, Notice, StatusMark } from "@/components/ui/primitives";
 import { ArrowDownCircle, ArrowUpCircle, Server, providerIcon } from "@/components/ui/icons";
 import { DetailGrid, DetailItem, ProtocolTabs } from "./ProtocolTabs";
-import { ReadOnlyMark, ResourceEditor, deleteResource, isEditable, type EditorTarget } from "./ResourceEditor";
+import { ReadOnlyMark, ResourceEditor, bare, deleteResource, isEditable, type EditorTarget } from "./ResourceEditor";
 import type { Protocol, TraefikService } from "@/lib/types";
 
 const PROTOCOLS: { key: Protocol; label: string }[] = [
@@ -15,6 +15,51 @@ const PROTOCOLS: { key: Protocol; label: string }[] = [
   { key: "tcp", label: "TCP" },
   { key: "udp", label: "UDP" },
 ];
+
+export interface TransportSummary {
+  insecureSkipVerify?: boolean;
+  serverName?: string;
+  rootCAs?: number;
+  timeouts?: boolean;
+}
+
+/** O que mais importa num transport: o Traefik aceitar qualquer certificado do backend. */
+function InsecureBadge() {
+  return (
+    <span
+      className="mt-1 inline-flex items-center gap-1 text-[10.5px] uppercase tracking-[0.12em] text-warn/90"
+      title="O transport deste service tem insecureSkipVerify: o Traefik aceita qualquer certificado do backend"
+    >
+      <LockOpen size={11} strokeWidth={2.2} aria-hidden />
+      cert. não validado
+    </span>
+  );
+}
+
+function TransportDetail({ name, info }: { name?: string; info?: TransportSummary }) {
+  if (!name) return <>padrão do Traefik (valida o certificado do backend)</>;
+  return (
+    <span className="space-y-0.5">
+      <Mono>{name}</Mono>
+      {info ? (
+        <>
+          {info.insecureSkipVerify ? (
+            <span className="block">
+              <InsecureBadge />
+            </span>
+          ) : (
+            <span className="block">valida o certificado do backend</span>
+          )}
+          {info.serverName && <span className="block">SNI: {info.serverName}</span>}
+          {info.rootCAs ? <span className="block">{info.rootCAs} CA(s) própria(s)</span> : null}
+          {info.timeouts && <span className="block">timeouts próprios</span>}
+        </>
+      ) : (
+        <span className="block text-muted/70">definido fora do arquivo deste painel</span>
+      )}
+    </span>
+  );
+}
 
 function serversOf(s: TraefikService): string[] {
   return (s.loadBalancer?.servers ?? []).map((srv) => srv.url ?? srv.address ?? "").filter(Boolean);
@@ -25,12 +70,18 @@ export function ServicesView({
   owned,
   locked,
   transports,
+  transportInfo,
 }: {
   services: Record<Protocol, TraefikService[]>;
   owned: Record<Protocol, string[]>;
   locked: Record<Protocol, string[]>;
   /** serversTransports do arquivo, para o seletor do formulário. */
   transports: string[];
+  /**
+   * Config dos transports do arquivo, por nome sem @provider. A API do
+   * Traefik não expõe serversTransports: só sabe o NOME que cada service usa.
+   */
+  transportInfo: Record<string, TransportSummary>;
 }) {
   const nav = useNextRouter();
   const [proto, setProto] = useState<Protocol>("http");
@@ -85,6 +136,7 @@ export function ServicesView({
               </span>
             ))}
             {list.length > 2 && <span className="block text-[12px] text-muted">+{list.length - 2} outros</span>}
+            {transportInfo[bare(s.loadBalancer?.serversTransport ?? "")]?.insecureSkipVerify && <InsecureBadge />}
           </span>
         );
       },
@@ -207,6 +259,12 @@ export function ServicesView({
                 {s.loadBalancer?.sticky?.cookie
                   ? `cookie ${s.loadBalancer.sticky.cookie.name ?? "(padrão)"}`
                   : "desativada"}
+              </DetailItem>
+              <DetailItem label="Servers transport">
+                <TransportDetail
+                  name={s.loadBalancer?.serversTransport}
+                  info={transportInfo[bare(s.loadBalancer?.serversTransport ?? "")]}
+                />
               </DetailItem>
               <DetailItem label="passHostHeader">
                 {s.loadBalancer?.passHostHeader == null ? "padrão" : String(s.loadBalancer.passHostHeader)}
