@@ -8,7 +8,7 @@ import { Badge, Button, IconButton, Mono, Notice, StatusMark } from "@/component
 import { Lock, Route, providerIcon } from "@/components/ui/icons";
 import { Pencil, Trash2, Plus } from "lucide-react";
 import { DetailGrid, DetailItem, ProtocolTabs } from "./ProtocolTabs";
-import { ResourceEditor, deleteResource, isEditable, type EditorTarget } from "./ResourceEditor";
+import { ReadOnlyMark, ResourceEditor, deleteResource, isEditable, type EditorTarget } from "./ResourceEditor";
 import { routerLinks } from "@/lib/router-links";
 import type { Protocol, TraefikEntryPoint, TraefikRouter } from "@/lib/types";
 
@@ -21,6 +21,7 @@ const PROTOCOLS: { key: Protocol; label: string }[] = [
 export function RoutersView({
   routers,
   owned,
+  locked,
   entryPoints,
   entryPointInfo,
   knownServices,
@@ -29,6 +30,8 @@ export function RoutersView({
   routers: Record<Protocol, TraefikRouter[]>;
   /** Nomes (sem @provider) que vivem no arquivo deste painel, por protocolo. */
   owned: Record<Protocol, string[]>;
+  /** Protegidos por UI_PROTECTED: aparecem com cadeado. */
+  locked: Record<Protocol, string[]>;
   entryPoints: string[];
   /** Endereços e redirects dos entrypoints — de onde sai scheme e porta dos links. */
   entryPointInfo: TraefikEntryPoint[];
@@ -162,16 +165,7 @@ export function RoutersView({
             />
           </span>
         ) : (
-          <span
-            className="text-[10px] uppercase tracking-[0.14em] text-muted/40"
-            title={
-              r.provider === "file"
-                ? "Definido em outro arquivo do file provider — este painel só escreve no seu próprio"
-                : `Gerenciado pelo provider ${r.provider ?? "desconhecido"} — edite na origem`
-            }
-          >
-            somente leitura
-          </span>
+          <ReadOnlyMark provider={r.provider} locked={isEditable(r.name, locked[proto])} />
         ),
     },
   ];

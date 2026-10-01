@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 import { Badge, Button, EmptyState, Mono, Notice, Panel, cx } from "@/components/ui/primitives";
 import { Modal } from "@/components/ui/Modal";
 import { CodeEditor } from "@/components/ui/CodeEditor";
+import { ReadOnlyMark } from "./ResourceEditor";
 import {
   MiddlewareForm,
   RouterForm,
@@ -34,12 +35,15 @@ export function ManageView({
   entryPoints,
   knownServices,
   knownMiddlewares,
+  locked,
 }: {
   config: DynamicConfig;
   raw: string;
   entryPoints: string[];
   knownServices: string[];
   knownMiddlewares: string[];
+  /** Protegidos por UI_PROTECTED: sem editar/remover aqui. */
+  locked: Record<Section, Record<Kind, string[]>>;
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("routers");
@@ -53,6 +57,7 @@ export function ManageView({
   const bucket = ((config[section] as Record<string, Record<string, unknown>> | undefined)?.[kind] ??
     {}) as Record<string, Record<string, unknown>>;
   const names = Object.keys(bucket).sort();
+  const isLocked = (name: string) => locked[section]?.[kind]?.includes(name) ?? false;
 
   function refresh() {
     startTransition(() => router.refresh());
@@ -180,23 +185,26 @@ export function ManageView({
                       {kind === "middlewares" && (
                         <Badge tone="orange">{Object.keys(bucket[name] ?? {})[0] ?? "?"}</Badge>
                       )}
+                      {isLocked(name) && <ReadOnlyMark locked />}
                     </div>
                     <p className="mt-1.5 truncate font-mono text-[12.5px] text-muted">
                       {summarize(kind, bucket[name])}
                     </p>
                   </div>
-                  <div className="flex shrink-0 gap-2">
-                    <Button
-                      variant="ghost"
-                      className="px-4 py-2"
-                      onClick={() => setEditing({ name, value: bucket[name] })}
-                    >
-                      Editar
-                    </Button>
-                    <Button variant="danger" className="px-4 py-2" onClick={() => remove(name)} disabled={busy}>
-                      Remover
-                    </Button>
-                  </div>
+                  {!isLocked(name) && (
+                    <div className="flex shrink-0 gap-2">
+                      <Button
+                        variant="ghost"
+                        className="px-4 py-2"
+                        onClick={() => setEditing({ name, value: bucket[name] })}
+                      >
+                        Editar
+                      </Button>
+                      <Button variant="danger" className="px-4 py-2" onClick={() => remove(name)} disabled={busy}>
+                        Remover
+                      </Button>
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>

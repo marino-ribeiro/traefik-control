@@ -7,7 +7,7 @@ import { DataTable, type Column } from "@/components/ui/DataTable";
 import { Badge, Button, IconButton, Notice, StatusMark } from "@/components/ui/primitives";
 import { Layers, providerIcon } from "@/components/ui/icons";
 import { DetailGrid, DetailItem } from "./ProtocolTabs";
-import { ResourceEditor, deleteResource, isEditable, type EditorTarget } from "./ResourceEditor";
+import { ReadOnlyMark, ResourceEditor, deleteResource, isEditable, type EditorTarget } from "./ResourceEditor";
 import type { TraefikMiddleware } from "@/lib/types";
 
 /** Keys that are metadata rather than middleware configuration. */
@@ -20,9 +20,11 @@ function configOf(m: TraefikMiddleware): Record<string, unknown> {
 export function MiddlewaresView({
   middlewares,
   owned,
+  locked,
 }: {
   middlewares: TraefikMiddleware[];
   owned: string[];
+  locked: string[];
 }) {
   const nav = useNextRouter();
   const [target, setTarget] = useState<EditorTarget | null>(null);
@@ -107,16 +109,7 @@ export function MiddlewaresView({
             />
           </span>
         ) : (
-          <span
-            className="text-[10px] uppercase tracking-[0.14em] text-muted/40"
-            title={
-              m.provider === "file"
-                ? "Definido em outro arquivo do file provider — este painel só escreve no seu próprio"
-                : `Gerenciado pelo provider ${m.provider ?? "desconhecido"} — edite na origem`
-            }
-          >
-            somente leitura
-          </span>
+          <ReadOnlyMark provider={m.provider} locked={isEditable(m.name, locked)} />
         ),
     },
   ];

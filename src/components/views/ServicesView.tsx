@@ -7,7 +7,7 @@ import { DataTable, type Column } from "@/components/ui/DataTable";
 import { Badge, Button, IconButton, Mono, Notice, StatusMark } from "@/components/ui/primitives";
 import { ArrowDownCircle, ArrowUpCircle, Server, providerIcon } from "@/components/ui/icons";
 import { DetailGrid, DetailItem, ProtocolTabs } from "./ProtocolTabs";
-import { ResourceEditor, deleteResource, isEditable, type EditorTarget } from "./ResourceEditor";
+import { ReadOnlyMark, ResourceEditor, deleteResource, isEditable, type EditorTarget } from "./ResourceEditor";
 import type { Protocol, TraefikService } from "@/lib/types";
 
 const PROTOCOLS: { key: Protocol; label: string }[] = [
@@ -23,9 +23,11 @@ function serversOf(s: TraefikService): string[] {
 export function ServicesView({
   services,
   owned,
+  locked,
 }: {
   services: Record<Protocol, TraefikService[]>;
   owned: Record<Protocol, string[]>;
+  locked: Record<Protocol, string[]>;
 }) {
   const nav = useNextRouter();
   const [proto, setProto] = useState<Protocol>("http");
@@ -122,16 +124,7 @@ export function ServicesView({
             />
           </span>
         ) : (
-          <span
-            className="text-[10px] uppercase tracking-[0.14em] text-muted/40"
-            title={
-              s.provider === "file"
-                ? "Definido em outro arquivo do file provider — este painel só escreve no seu próprio"
-                : `Gerenciado pelo provider ${s.provider ?? "desconhecido"} — edite na origem`
-            }
-          >
-            somente leitura
-          </span>
+          <ReadOnlyMark provider={s.provider} locked={isEditable(s.name, locked[proto])} />
         ),
     },
   ];

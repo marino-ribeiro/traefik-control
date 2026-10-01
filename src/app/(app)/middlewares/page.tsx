@@ -1,5 +1,5 @@
 import { getSnapshot } from "@/lib/snapshot";
-import { editableNames } from "@/lib/config-store";
+import { editableNames, lockedNames } from "@/lib/config-store";
 import { PageHeader } from "@/components/ui/primitives";
 import { SnapshotError } from "@/components/shell/SnapshotError";
 import { MiddlewaresView } from "@/components/views/MiddlewaresView";
@@ -29,7 +29,7 @@ export default async function MiddlewaresPage() {
           </div>
         }
       />
-      <MiddlewaresView middlewares={all} owned={owned.http.middlewares} />
+      <MiddlewaresView middlewares={all} owned={owned.http.middlewares} locked={lockedNames().http.middlewares} />
     </>
   );
 }

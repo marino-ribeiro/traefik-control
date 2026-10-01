@@ -78,6 +78,11 @@ Este painel reescreve o roteamento do seu Traefik. Ele foi construído assumindo
 - **Editor YAML sem atropelo**: se o arquivo mudou no disco depois que você abriu o
   editor (edição por fora, outra aba), gravar é recusado e o painel pergunta se
   você quer a versão do disco ou gravar a sua por cima.
+- **Não deixa você se trancar para fora.** As entradas listadas em `UI_PROTECTED`
+  (o router, o service e a whitelist do próprio painel) não podem ser editadas,
+  renomeadas nem removidas — nem pelos formulários, nem pelo YAML bruto, nem
+  restaurando backup. Aparecem com cadeado. Comentar ou reformatar em volta delas
+  continua permitido; recriar uma que sumiu do arquivo também (é o conserto).
 - **Só edita o que é seu.** O painel só oferece editar/remover para objetos que
   existem no arquivo que ele mesmo escreve. Objetos vindos do Docker — ou de outros
   arquivos que o file provider observa — aparecem marcados como somente leitura.
@@ -132,6 +137,7 @@ TRAEFIK_MOCK=1 npm run dev
 | `TRAEFIK_API_USER` / `TRAEFIK_API_PASSWORD` | — | Se a API estiver atrás de basic auth |
 | `TRAEFIK_DYNAMIC_FILE` | `./data/dynamic.yml` | Arquivo YAML que o painel escreve |
 | `UI_PASSWORD` | — | Senha do painel. **Vazio desativa a autenticação** |
+| `UI_PROTECTED` | — | Entradas que o painel recusa alterar, `secao.tipo.nome` separadas por vírgula. Ex.: `http.routers.painel,http.services.painel,http.middlewares.painel-ip` |
 | `UI_SESSION_SECRET` | aleatório por boot | Segredo do cookie. Gere com `openssl rand -hex 32`; sem ele, todo restart desloga |
 | `SERVER_PUBLIC_IP` | descoberto | IP(s) público(s) na Visão geral, separados por vírgula |
 | `SERVER_INTERNAL_IP` | interfaces de rede | IP(s) interno(s). **No Docker, informe** — o container só vê o próprio IP |

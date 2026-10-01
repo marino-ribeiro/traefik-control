@@ -1,5 +1,5 @@
 import { getSnapshot } from "@/lib/snapshot";
-import { editableNames } from "@/lib/config-store";
+import { editableNames, lockedNames } from "@/lib/config-store";
 import { PageHeader } from "@/components/ui/primitives";
 import { SnapshotError } from "@/components/shell/SnapshotError";
 import { ServicesView } from "@/components/views/ServicesView";
@@ -8,6 +8,7 @@ export const dynamic = "force-dynamic";
 
 export default async function ServicesPage() {
   const [{ snapshot, error, target }, owned] = await Promise.all([getSnapshot(), editableNames()]);
+  const locked = lockedNames();
   if (!snapshot) return <SnapshotError eyebrow="Services" target={target} error={error} />;
 
   const total = snapshot.services.http.length + snapshot.services.tcp.length + snapshot.services.udp.length;
@@ -28,6 +29,7 @@ export default async function ServicesPage() {
       <ServicesView
         services={snapshot.services}
         owned={{ http: owned.http.services, tcp: owned.tcp.services, udp: owned.udp.services }}
+        locked={{ http: locked.http.services, tcp: locked.tcp.services, udp: locked.udp.services }}
       />
     </>
   );

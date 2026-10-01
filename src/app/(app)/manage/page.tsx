@@ -1,5 +1,5 @@
 import { PageHeader, Mono, Notice } from "@/components/ui/primitives";
-import { DYNAMIC_FILE, readConfig, readConfigRaw } from "@/lib/config-store";
+import { DYNAMIC_FILE, lockedNames, readConfig, readConfigRaw } from "@/lib/config-store";
 import { getSnapshot } from "@/lib/snapshot";
 import { ManageView } from "@/components/views/ManageView";
 
@@ -44,6 +44,7 @@ export default async function ManagePage() {
         entryPoints={entryPoints}
         knownServices={knownServices}
         knownMiddlewares={knownMiddlewares}
+        locked={lockedNames()}
       />
     </>
   );

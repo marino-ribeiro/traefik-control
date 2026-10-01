@@ -25,6 +25,8 @@ const MAX_BACKUPS = 20;
 export type Kind = "routers" | "services" | "middlewares";
 export type Section = "http" | "tcp" | "udp";
 
+const KINDS: Kind[] = ["routers", "services", "middlewares"];
+
 export interface DynamicConfig {
   http?: { routers?: Record<string, unknown>; services?: Record<string, unknown>; middlewares?: Record<string, unknown> };
   tcp?: { routers?: Record<string, unknown>; services?: Record<string, unknown>; middlewares?: Record<string, unknown> };
@@ -323,8 +325,76 @@ export async function writeConfigRaw(raw: string, base?: string): Promise<void> 
         );
       }
     }
+    /* Disco com YAML quebrado: não há "antes" para comparar, e consertar o
+       arquivo pelo editor precisa continuar possível. */
+    const before = await readConfig().catch(() => undefined);
+    if (before !== undefined) assertProtectedUnchanged(before, (parsed ?? null) as DynamicConfig | null);
     await atomicWrite(raw.endsWith("\n") ? raw : `${raw}\n`);
   });
+}
+
+/* --------------------------------------------------------- protegidas */
+
+export interface EntryRef {
+  section: Section;
+  kind: Kind;
+  name: string;
+}
+
+/**
+ * Entradas que o painel se recusa a alterar ou remover — as que o mantêm no
+ * ar (o router dele, o service, a whitelist). Mexer numa delas tranca todo
+ * mundo para fora, e aí só pelo SSH. `UI_PROTECTED`, separadas por vírgula ou
+ * espaço: `http.routers.dashboard,http.services.traefik-control-service`.
+ * Lida a cada chamada: muda com um restart do container, sem rebuild.
+ */
+export function protectedEntries(): EntryRef[] {
+  const out: EntryRef[] = [];
+  for (const item of (process.env.UI_PROTECTED ?? "").split(/[\s,]+/).filter(Boolean)) {
+    const [section, kind, ...rest] = item.split(".");
+    const name = rest.join(".");
+    if (["http", "tcp", "udp"].includes(section) && KINDS.includes(kind as Kind) && NAME_RE.test(name)) {
+      out.push({ section: section as Section, kind: kind as Kind, name });
+    }
+  }
+  return out;
+}
+
+function isProtected(section: Section, kind: Kind, name: string): boolean {
+  return protectedEntries().some((p) => p.section === section && p.kind === kind && p.name === name);
+}
+
+function assertNotProtected(section: Section, kind: Kind, name: string): void {
+  if (isProtected(section, kind, name)) {
+    throw new ConfigError(
+      `"${name}" (${section}.${kind}) é protegido: é por ele que o painel fica no ar. ` +
+        "Para alterá-lo, edite o arquivo pelo servidor ou tire-o de UI_PROTECTED",
+      403,
+    );
+  }
+}
+
+function entryOf(config: DynamicConfig | null, ref: EntryRef): unknown {
+  const bucket = (config?.[ref.section] as Record<string, Record<string, unknown>> | undefined)?.[ref.kind];
+  return bucket?.[ref.name];
+}
+
+/**
+ * Para gravações do arquivo inteiro (YAML bruto, restaurar backup): recusa
+ * se alguma entrada protegida mudaria. Compara o valor resolvido, então
+ * reformatar ou comentar em volta dela continua permitido.
+ */
+function assertProtectedUnchanged(before: DynamicConfig | null, after: DynamicConfig | null): void {
+  const changed = protectedEntries()
+    .filter((ref) => JSON.stringify(entryOf(before, ref)) !== JSON.stringify(entryOf(after, ref)))
+    .map((ref) => `${ref.section}.${ref.kind}.${ref.name}`);
+  if (changed.length > 0) {
+    throw new ConfigError(
+      `esta versão altera entradas protegidas: ${changed.join(", ")} — é por elas que o painel fica no ar. ` +
+        "Mantenha-as como estão, ou faça a mudança pelo servidor",
+      403,
+    );
+  }
 }
 
 /** Names carry no provider suffix inside the file itself. */
@@ -366,6 +436,11 @@ export function upsertEntry(
     const target = mapAt(doc, root, [section, kind], true)!;
     const pairOf = (k: string) => target.items.find((p) => keyOf(p.key) === k);
 
+    /* Editar/renomear uma protegida é recusado; recriar uma que sumiu do
+       arquivo (apagada pelo servidor) é permitido — é o conserto. */
+    if (from !== null) assertNotProtected(section, kind, from);
+    if (pairOf(key)) assertNotProtected(section, kind, key);
+
     if (from !== key && pairOf(key)) {
       throw new ConfigError(`já existe "${key}" em ${section}.${kind} — escolha outro nome ou edite o existente`, 409);
     }
@@ -389,6 +464,7 @@ export function upsertEntry(
 export function deleteEntry(section: Section, kind: Kind, name: string): Promise<void> {
   return serialized(async () => {
     const key = bareName(name);
+    assertNotProtected(section, kind, key);
     const { doc, raw, root } = await loadDocument();
     const target = mapAt(doc, root, [section, kind], false);
     const pair = target?.items.find((p) => keyOf(p.key) === key);
@@ -401,13 +477,27 @@ export function deleteEntry(section: Section, kind: Kind, name: string): Promise
 /** Entries defined in our file, so the UI can mark what it is allowed to edit. */
 export async function editableNames(): Promise<Record<Section, Record<Kind, string[]>>> {
   const config = await readConfig();
+  /* Protegidas ficam de fora: as telas as mostram como somente leitura. */
   const pick = (section: Section, kind: Kind) =>
-    Object.keys(((config[section] as Record<string, Record<string, unknown>>)?.[kind] ?? {}) as object).sort();
+    Object.keys(((config[section] as Record<string, Record<string, unknown>>)?.[kind] ?? {}) as object)
+      .filter((name) => !isProtected(section, kind, name))
+      .sort();
   return {
     http: { routers: pick("http", "routers"), services: pick("http", "services"), middlewares: pick("http", "middlewares") },
     tcp: { routers: pick("tcp", "routers"), services: pick("tcp", "services"), middlewares: pick("tcp", "middlewares") },
     udp: { routers: pick("udp", "routers"), services: pick("udp", "services"), middlewares: [] },
   };
+}
+
+/** Nomes protegidos por seção e tipo, para as telas mostrarem o cadeado. */
+export function lockedNames(): Record<Section, Record<Kind, string[]>> {
+  const out = {
+    http: { routers: [], services: [], middlewares: [] },
+    tcp: { routers: [], services: [], middlewares: [] },
+    udp: { routers: [], services: [], middlewares: [] },
+  } as Record<Section, Record<Kind, string[]>>;
+  for (const p of protectedEntries()) out[p.section][p.kind].push(p.name);
+  return out;
 }
 
 export async function listBackups(): Promise<string[]> {

@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { Lock } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Notice } from "@/components/ui/primitives";
 import { MiddlewareForm, RouterForm, ServiceForm, type RouterValue, type ServiceValue } from "./manage-forms";
@@ -22,6 +23,37 @@ export function bare(name: string): string {
  */
 export function isEditable(name: string, owned: string[]): boolean {
   return owned.includes(bare(name));
+}
+
+/**
+ * Marca da coluna de ações quando não dá para editar. Protegido (ver
+ * `UI_PROTECTED`) ganha cadeado e explicação própria: é do painel, não de
+ * outro provider.
+ */
+export function ReadOnlyMark({ provider, locked }: { provider?: string; locked: boolean }) {
+  if (locked) {
+    return (
+      <span
+        className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.14em] text-warn/80"
+        title="Protegido: é por esta entrada que o painel fica no ar. Altere pelo servidor (ou tire de UI_PROTECTED)."
+      >
+        <Lock size={11} strokeWidth={2.2} aria-hidden />
+        protegido
+      </span>
+    );
+  }
+  return (
+    <span
+      className="text-[10px] uppercase tracking-[0.14em] text-muted/40"
+      title={
+        provider === "file"
+          ? "Definido em outro arquivo do file provider — este painel só escreve no seu próprio"
+          : `Gerenciado pelo provider ${provider ?? "desconhecido"} — edite na origem`
+      }
+    >
+      somente leitura
+    </span>
+  );
 }
 
 export interface EditorTarget {

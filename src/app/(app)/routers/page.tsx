@@ -1,5 +1,5 @@
 import { getSnapshot } from "@/lib/snapshot";
-import { editableNames, readConfig } from "@/lib/config-store";
+import { editableNames, lockedNames, readConfig } from "@/lib/config-store";
 import { PageHeader } from "@/components/ui/primitives";
 import { SnapshotError } from "@/components/shell/SnapshotError";
 import { RoutersView } from "@/components/views/RoutersView";
@@ -12,6 +12,7 @@ export default async function RoutersPage() {
     readConfig(),
     editableNames(),
   ]);
+  const locked = lockedNames();
   if (!snapshot) return <SnapshotError eyebrow="Routers" target={target} error={error} />;
 
   const total = snapshot.routers.http.length + snapshot.routers.tcp.length + snapshot.routers.udp.length;
@@ -48,6 +49,7 @@ export default async function RoutersPage() {
       <RoutersView
         routers={snapshot.routers}
         owned={{ http: owned.http.routers, tcp: owned.tcp.routers, udp: owned.udp.routers }}
+        locked={{ http: locked.http.routers, tcp: locked.tcp.routers, udp: locked.udp.routers }}
         entryPoints={entryPoints}
         entryPointInfo={snapshot.entryPoints}
         knownServices={knownServices}
