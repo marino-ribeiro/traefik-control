@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter as useNextRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { Badge, Button, IconButton, Mono, Notice, StatusMark } from "@/components/ui/primitives";
@@ -9,7 +9,8 @@ import { Lock, Route, providerIcon } from "@/components/ui/icons";
 import { Pencil, Trash2, Plus } from "lucide-react";
 import { DetailGrid, DetailItem, ProtocolTabs } from "./ProtocolTabs";
 import { ResourceEditor, deleteResource, isEditable, type EditorTarget } from "./ResourceEditor";
-import type { Protocol, TraefikRouter } from "@/lib/types";
+import { routerLinks } from "@/lib/router-links";
+import type { Protocol, TraefikEntryPoint, TraefikRouter } from "@/lib/types";
 
 const PROTOCOLS: { key: Protocol; label: string }[] = [
   { key: "http", label: "HTTP" },
@@ -21,6 +22,7 @@ export function RoutersView({
   routers,
   owned,
   entryPoints,
+  entryPointInfo,
   knownServices,
   knownMiddlewares,
 }: {
@@ -28,6 +30,8 @@ export function RoutersView({
   /** Nomes (sem @provider) que vivem no arquivo deste painel, por protocolo. */
   owned: Record<Protocol, string[]>;
   entryPoints: string[];
+  /** Endereços e redirects dos entrypoints — de onde sai scheme e porta dos links. */
+  entryPointInfo: TraefikEntryPoint[];
   knownServices: string[];
   knownMiddlewares: string[];
 }) {
@@ -36,6 +40,13 @@ export function RoutersView({
   const [target, setTarget] = useState<EditorTarget | null>(null);
   const [flash, setFlash] = useState<{ tone: "info" | "error"; text: string } | null>(null);
   const rows = routers[proto];
+
+  /* Só HTTP abre no navegador; TCP/UDP não têm o que linkar. */
+  const links = useMemo(
+    () => new Map(routers.http.map((r) => [r.name, routerLinks(r, entryPointInfo)])),
+    [routers.http, entryPointInfo],
+  );
+  const linksOf = (r: TraefikRouter) => (proto === "http" ? (links.get(r.name) ?? []) : []);
 
   async function remove(name: string) {
     if (!confirm(`Remover o router "${name}"? Um backup do arquivo será mantido.`)) return;
@@ -61,7 +72,24 @@ export function RoutersView({
       key: "name",
       header: "Nome",
       sortValue: (r) => r.name,
-      render: (r) => <span className="font-mono text-[13.5px] font-medium text-fg">{r.name}</span>,
+      render: (r) => {
+        const [first, ...rest] = linksOf(r);
+        return (
+          <span className="block">
+            <span className="font-mono text-[13.5px] font-medium text-fg">{r.name}</span>
+            {first && (
+              <span className="mt-1 flex items-center gap-2">
+                <ServiceLink href={first} />
+                {rest.length > 0 && (
+                  <span className="text-[11px] tabular-nums text-muted/60" title={rest.map(display).join("\n")}>
+                    +{rest.length}
+                  </span>
+                )}
+              </span>
+            )}
+          </span>
+        );
+      },
     },
     {
       key: "rule",
@@ -184,6 +212,15 @@ export function RoutersView({
           emptyIcon={Route}
           detail={(r) => (
             <DetailGrid>
+              {linksOf(r).length > 0 && (
+                <DetailItem label="Acesso">
+                  <span className="flex flex-col items-start gap-1.5">
+                    {linksOf(r).map((href) => (
+                      <ServiceLink key={href} href={href} />
+                    ))}
+                  </span>
+                </DetailItem>
+              )}
               <DetailItem label="Regra completa">
                 {r.rule ? <Mono className="break-all">{r.rule}</Mono> : "—"}
               </DetailItem>
@@ -234,5 +271,36 @@ export function RoutersView({
         knownMiddlewares={knownMiddlewares}
       />
     </>
+  );
+}
+
+/** "https://app.exemplo.com/" → "app.exemplo.com"; mantém porta e caminho. */
+function display(href: string): string {
+  return href.replace(/^https?:\/\//, "").replace(/\/$/, "");
+}
+
+/**
+ * Abre o serviço numa aba nova. O clique não propaga para a linha, senão
+ * abrir o link também expandiria/fecharia os detalhes.
+ */
+function ServiceLink({ href }: { href: string }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      title={`Abrir ${href} numa nova aba`}
+      className="group inline-flex max-w-full items-center gap-1.5 font-mono text-[12px] text-muted underline-offset-4 transition-colors duration-200 ease-geist hover:text-red hover:underline focus-visible:text-red focus-visible:underline focus-visible:outline-none"
+    >
+      <span className="truncate">{display(href)}</span>
+      {/* O mesmo ▶ do botão de expandir a linha, apontando para fora. */}
+      <span
+        aria-hidden
+        className="inline-block shrink-0 -rotate-45 text-[10px] leading-none opacity-60 transition-opacity group-hover:opacity-100"
+      >
+        ▶
+      </span>
+    </a>
   );
 }

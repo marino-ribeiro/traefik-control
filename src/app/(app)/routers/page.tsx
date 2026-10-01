@@ -49,6 +49,7 @@ export default async function RoutersPage() {
         routers={snapshot.routers}
         owned={{ http: owned.http.routers, tcp: owned.tcp.routers, udp: owned.udp.routers }}
         entryPoints={entryPoints}
+        entryPointInfo={snapshot.entryPoints}
         knownServices={knownServices}
         knownMiddlewares={knownMiddlewares}
       />
