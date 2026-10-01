@@ -1,16 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { AXIS_TEXT, GRID_COLOR } from "./palette";
 
-/** Mede o container para renderizar em pixels reais — escalar o SVG por
- *  viewBox distorceria traços e texto. */
-export function useChartWidth(): [React.RefObject<HTMLDivElement | null>, number] {
-  const ref = useRef<HTMLDivElement | null>(null);
+/**
+ * Mede o container para renderizar em pixels reais — escalar o SVG por
+ * viewBox distorceria traços e texto.
+ *
+ * Callback ref, não useRef + efeito: o container sai da árvore quando o
+ * ChartFrame mostra a tabela e volta como um elemento NOVO. Com o efeito
+ * rodando só na montagem, o observer ficava preso ao elemento antigo — que
+ * ao sair ainda reporta largura 0 — e o gráfico voltava vazio até um F5.
+ * Assim cada elemento que entra é observado, e o que sai é desligado.
+ */
+export function useChartWidth(): [(el: HTMLDivElement | null) => (() => void) | void, number] {
   const [width, setWidth] = useState(0);
 
-  useEffect(() => {
-    const el = ref.current;
+  const ref = useCallback((el: HTMLDivElement | null) => {
     if (!el) return;
     const ro = new ResizeObserver(([entry]) => {
       setWidth(Math.max(0, Math.floor(entry.contentRect.width)));
