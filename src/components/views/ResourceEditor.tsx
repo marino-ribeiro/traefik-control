@@ -78,6 +78,7 @@ export function ResourceEditor({
   entryPoints = [],
   knownServices = [],
   knownMiddlewares = [],
+  knownTransports = [],
 }: {
   kind: Kind;
   section: Section;
@@ -86,9 +87,11 @@ export function ResourceEditor({
   entryPoints?: string[];
   knownServices?: string[];
   knownMiddlewares?: string[];
+  knownTransports?: string[];
 }) {
   const editingName = target?.name ? bare(target.name) : undefined;
-  const singular = kind === "routers" ? "router" : kind === "services" ? "service" : "middleware";
+  const singular =
+    kind === "routers" ? "router" : kind === "services" ? "service" : kind === "middlewares" ? "middleware" : "transport";
 
   return (
     <Modal
@@ -110,6 +113,7 @@ export function ResourceEditor({
           entryPoints={entryPoints}
           knownServices={knownServices}
           knownMiddlewares={knownMiddlewares}
+          knownTransports={knownTransports}
         />
       )}
     </Modal>
@@ -124,6 +128,7 @@ function EditorBody({
   entryPoints,
   knownServices,
   knownMiddlewares,
+  knownTransports,
 }: {
   kind: Kind;
   section: Section;
@@ -132,6 +137,7 @@ function EditorBody({
   entryPoints: string[];
   knownServices: string[];
   knownMiddlewares: string[];
+  knownTransports: string[];
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -215,6 +221,7 @@ function EditorBody({
           initialName={editingName}
           initial={value as ServiceValue | undefined}
           section={section === "udp" ? "tcp" : section}
+          transports={knownTransports}
           busy={busy}
           onSubmit={save}
         />

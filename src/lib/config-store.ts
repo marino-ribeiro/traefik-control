@@ -22,13 +22,18 @@ export const DYNAMIC_FILE = process.env.TRAEFIK_DYNAMIC_FILE
 const BACKUP_DIR = path.join(path.dirname(DYNAMIC_FILE), ".backups");
 const MAX_BACKUPS = 20;
 
-export type Kind = "routers" | "services" | "middlewares";
+export type Kind = "routers" | "services" | "middlewares" | "serversTransports";
 export type Section = "http" | "tcp" | "udp";
 
-const KINDS: Kind[] = ["routers", "services", "middlewares"];
+const KINDS: Kind[] = ["routers", "services", "middlewares", "serversTransports"];
 
 export interface DynamicConfig {
-  http?: { routers?: Record<string, unknown>; services?: Record<string, unknown>; middlewares?: Record<string, unknown> };
+  http?: {
+    routers?: Record<string, unknown>;
+    services?: Record<string, unknown>;
+    middlewares?: Record<string, unknown>;
+    serversTransports?: Record<string, unknown>;
+  };
   tcp?: { routers?: Record<string, unknown>; services?: Record<string, unknown>; middlewares?: Record<string, unknown> };
   udp?: { routers?: Record<string, unknown>; services?: Record<string, unknown> };
   tls?: Record<string, unknown>;
@@ -397,6 +402,32 @@ function assertProtectedUnchanged(before: DynamicConfig | null, after: DynamicCo
   }
 }
 
+/**
+ * Services do arquivo que apontam para o transport `name`. Apagar ou
+ * renomear um transport em uso deixaria esses services quebrados (o Traefik
+ * os desativa), então isso é recusado enquanto houver referência.
+ */
+function transportUsers(config: DynamicConfig, name: string): string[] {
+  return Object.entries(config.http?.services ?? {})
+    .filter(([, svc]) => {
+      const ref = (svc as { loadBalancer?: { serversTransport?: unknown } })?.loadBalancer?.serversTransport;
+      return typeof ref === "string" && bareName(ref) === name;
+    })
+    .map(([svc]) => svc)
+    .sort();
+}
+
+function assertTransportUnused(kind: Kind, name: string, config: DynamicConfig, verb: string): void {
+  if (kind !== "serversTransports") return;
+  const users = transportUsers(config, name);
+  if (users.length > 0) {
+    throw new ConfigError(
+      `não dá para ${verb} "${name}": em uso pelo(s) service(s) ${users.join(", ")} — troque o transport deles antes`,
+      409,
+    );
+  }
+}
+
 /** Names carry no provider suffix inside the file itself. */
 export function bareName(name: string): string {
   return name.split("@")[0];
@@ -448,6 +479,7 @@ export function upsertEntry(
     if (from !== null && from !== key) {
       const pair = pairOf(from);
       if (!pair) throw new ConfigError(`"${from}" não existe mais em ${section}.${kind} — recarregue a página`, 404);
+      assertTransportUnused(kind, from, doc.toJS() as DynamicConfig, "renomear");
       /* Renomeia no lugar: mesma posição, mesmo comentário acima. */
       if (isScalar(pair.key)) pair.key.value = key;
       else pair.key = doc.createNode(key);
@@ -469,6 +501,7 @@ export function deleteEntry(section: Section, kind: Kind, name: string): Promise
     const target = mapAt(doc, root, [section, kind], false);
     const pair = target?.items.find((p) => keyOf(p.key) === key);
     if (!target || !pair) throw new ConfigError(`"${key}" não existe em ${section}.${kind}`, 404);
+    assertTransportUnused(kind, key, doc.toJS() as DynamicConfig, "remover");
     target.delete(pair.key);
     await writeDocument(doc, root, raw);
   });
@@ -483,18 +516,28 @@ export async function editableNames(): Promise<Record<Section, Record<Kind, stri
       .filter((name) => !isProtected(section, kind, name))
       .sort();
   return {
-    http: { routers: pick("http", "routers"), services: pick("http", "services"), middlewares: pick("http", "middlewares") },
-    tcp: { routers: pick("tcp", "routers"), services: pick("tcp", "services"), middlewares: pick("tcp", "middlewares") },
-    udp: { routers: pick("udp", "routers"), services: pick("udp", "services"), middlewares: [] },
+    http: {
+      routers: pick("http", "routers"),
+      services: pick("http", "services"),
+      middlewares: pick("http", "middlewares"),
+      serversTransports: pick("http", "serversTransports"),
+    },
+    tcp: {
+      routers: pick("tcp", "routers"),
+      services: pick("tcp", "services"),
+      middlewares: pick("tcp", "middlewares"),
+      serversTransports: [],
+    },
+    udp: { routers: pick("udp", "routers"), services: pick("udp", "services"), middlewares: [], serversTransports: [] },
   };
 }
 
 /** Nomes protegidos por seção e tipo, para as telas mostrarem o cadeado. */
 export function lockedNames(): Record<Section, Record<Kind, string[]>> {
   const out = {
-    http: { routers: [], services: [], middlewares: [] },
-    tcp: { routers: [], services: [], middlewares: [] },
-    udp: { routers: [], services: [], middlewares: [] },
+    http: { routers: [], services: [], middlewares: [], serversTransports: [] },
+    tcp: { routers: [], services: [], middlewares: [], serversTransports: [] },
+    udp: { routers: [], services: [], middlewares: [], serversTransports: [] },
   } as Record<Section, Record<Kind, string[]>>;
   for (const p of protectedEntries()) out[p.section][p.kind].push(p.name);
   return out;

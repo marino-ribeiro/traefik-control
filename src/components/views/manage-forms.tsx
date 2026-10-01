@@ -3,9 +3,18 @@
 import { useState } from "react";
 import { Badge, Button, Checkbox, Field, Input, Notice, Select, Textarea, cx } from "@/components/ui/primitives";
 import { CodeEditor } from "@/components/ui/CodeEditor";
-import { buildRouterValue, buildServiceValue, type RouterValue, type ServiceValue } from "./form-values";
+import {
+  TRANSPORT_TIMEOUTS,
+  buildRouterValue,
+  buildServiceValue,
+  buildTransportValue,
+  type RouterValue,
+  type ServiceValue,
+  type TransportTimeout,
+  type TransportValue,
+} from "./form-values";
 
-export type { RouterValue, ServiceValue } from "./form-values";
+export type { RouterValue, ServiceValue, TransportValue } from "./form-values";
 
 /* ================================================================ helpers */
 
@@ -191,12 +200,15 @@ export function ServiceForm({
   initialName,
   initial,
   section,
+  transports = [],
   onSubmit,
   busy,
 }: {
   initialName?: string;
   initial?: ServiceValue;
   section: "http" | "tcp";
+  /** serversTransports conhecidos, para o seletor. */
+  transports?: string[];
   onSubmit: (name: string, value: ServiceValue) => void;
   busy: boolean;
 }) {
@@ -213,6 +225,7 @@ export function ServiceForm({
   const [passHost, setPassHost] = useState(initial?.loadBalancer?.passHostHeader ?? true);
   const [hcPath, setHcPath] = useState(initial?.loadBalancer?.healthCheck?.path ?? "");
   const [hcInterval, setHcInterval] = useState(initial?.loadBalancer?.healthCheck?.interval ?? "10s");
+  const [transport, setTransport] = useState(initial?.loadBalancer?.serversTransport ?? "");
   const [error, setError] = useState<string | null>(null);
 
   function submit() {
@@ -237,7 +250,7 @@ export function ServiceForm({
         passHostHeader: passHost,
         hcPath,
         hcInterval,
-        serversTransport: initial?.loadBalancer?.serversTransport ?? "",
+        serversTransport: isHttp ? transport : (initial?.loadBalancer?.serversTransport ?? ""),
       }),
     );
   }
@@ -284,6 +297,20 @@ export function ServiceForm({
               <Input value={hcInterval} onChange={(e) => setHcInterval(e.target.value)} placeholder="10s" />
             </Field>
           </div>
+
+          <Field
+            label="Servers transport"
+            hint="Como o Traefik fala com backend https — ex.: aceitar certificado autoassinado. Vazio = padrão."
+          >
+            <Select value={transport} onChange={(e) => setTransport(e.target.value)}>
+              <option value="">(padrão do Traefik)</option>
+              {[...new Set([...transports, ...(transport ? [transport] : [])])].sort().map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </Select>
+          </Field>
         </>
       )}
 
@@ -383,6 +410,125 @@ export function MiddlewareForm({
 
       <Button onClick={submit} disabled={busy} className="w-full">
         {busy ? "Gravando…" : "Salvar middleware"}
+      </Button>
+    </div>
+  );
+}
+
+/* ========================================================= TransportForm */
+
+const TIMEOUT_LABELS: Record<TransportTimeout, { label: string; hint: string }> = {
+  dialTimeout: { label: "Conexão", hint: "Tempo para abrir a conexão. Padrão 30s." },
+  responseHeaderTimeout: { label: "Resposta", hint: "Espera pelos headers. Vazio = sem limite." },
+  idleConnTimeout: { label: "Ociosa", hint: "Conexão parada antes de fechar. Padrão 90s." },
+};
+
+export function TransportForm({
+  initialName,
+  initial,
+  onSubmit,
+  busy,
+}: {
+  initialName?: string;
+  initial?: TransportValue;
+  onSubmit: (name: string, value: TransportValue) => void;
+  busy: boolean;
+}) {
+  const [name, setName] = useState(initialName ?? "");
+  const [serverName, setServerName] = useState(initial?.serverName ?? "");
+  const [insecure, setInsecure] = useState(initial?.insecureSkipVerify ?? false);
+  const [rootCAs, setRootCAs] = useState((initial?.rootCAs ?? []).join("\n"));
+  const [maxIdle, setMaxIdle] = useState(initial?.maxIdleConnsPerHost != null ? String(initial.maxIdleConnsPerHost) : "");
+  const [noH2, setNoH2] = useState(initial?.disableHTTP2 ?? false);
+  const [timeouts, setTimeouts] = useState<Record<TransportTimeout, string>>(() => ({
+    dialTimeout: initial?.forwardingTimeouts?.dialTimeout ?? "",
+    responseHeaderTimeout: initial?.forwardingTimeouts?.responseHeaderTimeout ?? "",
+    idleConnTimeout: initial?.forwardingTimeouts?.idleConnTimeout ?? "",
+  }));
+  const [error, setError] = useState<string | null>(null);
+
+  function submit() {
+    if (!name.trim()) return setError("O nome é obrigatório.");
+    if (maxIdle.trim() && !/^\d+$/.test(maxIdle.trim())) return setError("Conexões ociosas por host: número inteiro.");
+    const badTimeout = TRANSPORT_TIMEOUTS.find((k) => timeouts[k].trim() && !/^\d+(ms|s|m|h)$/.test(timeouts[k].trim()));
+    if (badTimeout) return setError(`${TIMEOUT_LABELS[badTimeout].label}: use uma duração como 30s, 500ms ou 2m.`);
+    setError(null);
+    onSubmit(
+      name.trim(),
+      buildTransportValue(initial, {
+        serverName,
+        insecureSkipVerify: insecure,
+        rootCAs: splitList(rootCAs),
+        maxIdleConnsPerHost: maxIdle,
+        disableHTTP2: noH2,
+        timeouts,
+      }),
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <Field label="Nome" hint="É o que o service referencia em serversTransport.">
+        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="backend-transport" autoFocus />
+      </Field>
+
+      <label className="flex cursor-pointer items-center gap-3 rounded-control border border-white/10 bg-black/40 px-3 py-2.5 transition-colors duration-200 ease-geist hover:border-white/20">
+        <Checkbox checked={insecure} onChange={(e) => setInsecure(e.target.checked)} />
+        <span className="text-[14px]">Não validar o certificado do backend (insecureSkipVerify)</span>
+      </label>
+      {insecure && (
+        <Notice tone="warn">
+          O Traefik aceita qualquer certificado do backend, inclusive um falso. Use só para backend com certificado
+          autoassinado ou expirado numa rede que você controla.
+        </Notice>
+      )}
+
+      <Field label="Server name (SNI)" hint="Nome enviado ao backend no TLS. Vazio = o host da URL do service.">
+        <Input
+          value={serverName}
+          onChange={(e) => setServerName(e.target.value)}
+          placeholder="backend.interno"
+          className="font-mono text-[13px]"
+        />
+      </Field>
+
+      <Field label="CAs confiáveis" hint="Um caminho de arquivo PEM por linha, visto de dentro do container do Traefik.">
+        <Textarea
+          rows={2}
+          value={rootCAs}
+          onChange={(e) => setRootCAs(e.target.value)}
+          placeholder="/etc/traefik/certs/ca-interna.pem"
+        />
+      </Field>
+
+      <div className="grid gap-5 sm:grid-cols-3">
+        {TRANSPORT_TIMEOUTS.map((k) => (
+          <Field key={k} label={TIMEOUT_LABELS[k].label} hint={TIMEOUT_LABELS[k].hint}>
+            <Input
+              value={timeouts[k]}
+              onChange={(e) => setTimeouts((t) => ({ ...t, [k]: e.target.value }))}
+              placeholder="30s"
+            />
+          </Field>
+        ))}
+      </div>
+
+      <div className="grid gap-5 sm:grid-cols-2">
+        <Field label="Conexões ociosas por host" hint="Vazio = padrão do Traefik (200).">
+          <Input value={maxIdle} onChange={(e) => setMaxIdle(e.target.value)} inputMode="numeric" />
+        </Field>
+        <Field label="HTTP/2">
+          <label className="flex cursor-pointer items-center gap-3 rounded-control border border-white/10 bg-black/40 px-3 py-2.5 transition-colors duration-200 ease-geist hover:border-white/20">
+            <Checkbox checked={noH2} onChange={(e) => setNoH2(e.target.checked)} />
+            <span className="text-[14px]">Desligar HTTP/2 com o backend</span>
+          </label>
+        </Field>
+      </div>
+
+      {error && <Notice tone="error">{error}</Notice>}
+
+      <Button onClick={submit} disabled={busy} className="w-full">
+        {busy ? "Gravando…" : "Salvar transport"}
       </Button>
     </div>
   );

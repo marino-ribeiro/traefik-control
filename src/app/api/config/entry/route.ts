@@ -6,7 +6,7 @@ import { ConfigError, deleteEntry, upsertEntry, type Kind, type Section } from "
 export const dynamic = "force-dynamic";
 
 const SECTIONS: Section[] = ["http", "tcp", "udp"];
-const KINDS: Kind[] = ["routers", "services", "middlewares"];
+const KINDS: Kind[] = ["routers", "services", "middlewares", "serversTransports"];
 
 function fail(err: unknown) {
   const status = err instanceof ConfigError ? err.status : ((err as { status?: number }).status ?? 500);
@@ -22,6 +22,11 @@ function validate(section: unknown, kind: unknown): { section: Section; kind: Ki
   }
   if (section === "udp" && kind === "middlewares") {
     throw new ConfigError("UDP não suporta middlewares");
+  }
+  /* tcp.serversTransports existe no Traefik, mas com outros campos; o
+     formulário é o de HTTP. */
+  if (section !== "http" && kind === "serversTransports") {
+    throw new ConfigError("serversTransports: só http por enquanto (os de tcp ficam no YAML bruto)");
   }
   return { section: section as Section, kind: kind as Kind };
 }

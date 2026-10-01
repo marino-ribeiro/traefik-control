@@ -5,7 +5,7 @@ import { ConfigError, bareName, readConfig, type Kind, type Section } from "@/li
 export const dynamic = "force-dynamic";
 
 const SECTIONS = new Set(["http", "tcp", "udp"]);
-const KINDS = new Set(["routers", "services", "middlewares"]);
+const KINDS = new Set(["routers", "services", "middlewares", "serversTransports"]);
 
 /**
  * Devolve UMA entrada do arquivo dinâmico, já parseada.

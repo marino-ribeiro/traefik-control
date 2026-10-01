@@ -11,17 +11,20 @@ import {
   MiddlewareForm,
   RouterForm,
   ServiceForm,
+  TransportForm,
   type RouterValue,
   type ServiceValue,
+  type TransportValue,
 } from "./manage-forms";
 import type { DynamicConfig, Kind, Section } from "@/lib/config-store";
 
-type Tab = "routers" | "services" | "middlewares" | "yaml" | "backups";
+type Tab = "routers" | "services" | "middlewares" | "serversTransports" | "yaml" | "backups";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "routers", label: "Routers" },
   { key: "services", label: "Services" },
   { key: "middlewares", label: "Middlewares" },
+  { key: "serversTransports", label: "Transports" },
   { key: "yaml", label: "YAML bruto" },
   { key: "backups", label: "Backups" },
 ];
@@ -107,7 +110,15 @@ export function ManageView({
     }
   }
 
-  const sectionsFor: Section[] = tab === "middlewares" ? ["http", "tcp"] : ["http", "tcp", "udp"];
+  const sectionsFor: Section[] =
+    tab === "serversTransports" ? ["http"] : tab === "middlewares" ? ["http", "tcp"] : ["http", "tcp", "udp"];
+  const transports = Object.keys(config.http?.serversTransports ?? {}).sort();
+  const transportOf = Object.fromEntries(
+    Object.entries(config.http?.services ?? {}).flatMap(([svc, v]) => {
+      const ref = (v as ServiceValue)?.loadBalancer?.serversTransport;
+      return typeof ref === "string" ? [[svc, ref.split("@")[0]]] : [];
+    }),
+  );
 
   return (
     <>
@@ -122,6 +133,7 @@ export function ManageView({
               onClick={() => {
                 setTab(t.key);
                 if (t.key === "middlewares" && section === "udp") setSection("http");
+                if (t.key === "serversTransports") setSection("http");
               }}
               className={cx(
                 "rounded-control border px-4 py-2.5 text-[12px] font-bold uppercase tracking-[0.14em] transition-colors duration-200 ease-geist",
@@ -202,7 +214,7 @@ export function ManageView({
                       {isLocked(name) && <ReadOnlyMark locked />}
                     </div>
                     <p className="mt-1.5 truncate font-mono text-[12.5px] text-muted">
-                      {summarize(kind, bucket[name])}
+                      {summarize(kind, bucket[name], name, transportOf)}
                     </p>
                   </div>
                   {!isLocked(name) && (
@@ -249,6 +261,15 @@ export function ManageView({
             initialName={editing.name}
             initial={editing.value as ServiceValue}
             section={section === "udp" ? "tcp" : section}
+            transports={transports}
+            busy={busy}
+            onSubmit={(name, value) => save(name, value, editing.name)}
+          />
+        )}
+        {editing !== null && kind === "serversTransports" && (
+          <TransportForm
+            initialName={editing.name}
+            initial={editing.value as TransportValue}
             busy={busy}
             onSubmit={(name, value) => save(name, value, editing.name)}
           />
@@ -267,15 +288,38 @@ export function ManageView({
 }
 
 /** One-line preview of an entry, so the list is scannable without expanding. */
-function summarize(kind: Kind, value: Record<string, unknown> | undefined): string {
+function summarize(
+  kind: Kind,
+  value: Record<string, unknown> | undefined,
+  name?: string,
+  /** service → transport que ele usa, para mostrar quem depende de cada um. */
+  usersOf?: Record<string, string>,
+): string {
   if (!value) return "—";
   if (kind === "routers") {
     const r = value as RouterValue;
     return [r.rule, r.service && `→ ${r.service}`].filter(Boolean).join("  ") || "—";
   }
   if (kind === "services") {
-    const servers = (value as ServiceValue).loadBalancer?.servers ?? [];
-    return servers.map((s) => s.url ?? s.address).filter(Boolean).join(", ") || "sem servidores";
+    const lb = (value as ServiceValue).loadBalancer;
+    const servers = (lb?.servers ?? []).map((s) => s.url ?? s.address).filter(Boolean).join(", ") || "sem servidores";
+    return lb?.serversTransport ? `${servers}  via ${lb.serversTransport}` : servers;
+  }
+  if (kind === "serversTransports") {
+    const t = value as TransportValue;
+    const users = Object.entries(usersOf ?? {})
+      .filter(([, ref]) => ref === name)
+      .map(([svc]) => svc);
+    return (
+      [
+        t.insecureSkipVerify && "sem validar certificado",
+        t.serverName && `SNI ${t.serverName}`,
+        t.rootCAs?.length && `${t.rootCAs.length} CA(s)`,
+        t.forwardingTimeouts && "timeouts próprios",
+      ]
+        .filter(Boolean)
+        .join(" · ") || "padrões do Traefik"
+    ) + `  — usado por ${users.length ? users.join(", ") : "nenhum service"}`;
   }
   return JSON.stringify(Object.values(value)[0] ?? {});
 }

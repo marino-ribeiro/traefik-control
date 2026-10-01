@@ -19,7 +19,7 @@ YAML no servidor na unha.
 | **Services** | Servidores do load balancer com estado individual, health check e sessão fixa. **CRUD na própria tela** |
 | **Middlewares** | Tipo, configuração completa e onde cada um é usado. **CRUD na própria tela** |
 | **Entrypoints** | Portas em escuta, redirecionamentos e cert resolver (somente leitura — vêm da config estática) |
-| **Gerenciar** | A mesma edição, organizada por tipo, a lista de backups com comparação e restauração, e um editor de YAML bruto do arquivo inteiro — com números de linha, guias de indentação e Tab/Enter de IDE (Ctrl+M devolve o Tab à navegação) |
+| **Gerenciar** | A mesma edição, organizada por tipo (inclusive `serversTransports`: SNI, certificado não validado, CAs, timeouts), a lista de backups com comparação e restauração, e um editor de YAML bruto do arquivo inteiro — com números de linha, guias de indentação e Tab/Enter de IDE (Ctrl+M devolve o Tab à navegação) |
 | **Servidor** | Atalho ao lado do selo live/demo: IP público (A/AAAA) e interno para apontamento DNS, com botão de copiar; versão e uptime do Traefik; arquivo, métricas e autenticação em uso |
 
 ## De onde vêm os dados
@@ -88,6 +88,9 @@ Este painel reescreve o roteamento do seu Traefik. Ele foi construído assumindo
   renomeadas nem removidas — nem pelos formulários, nem pelo YAML bruto, nem
   restaurando backup. Aparecem com cadeado. Comentar ou reformatar em volta delas
   continua permitido; recriar uma que sumiu do arquivo também (é o conserto).
+- **Transport em uso não some.** Remover ou renomear um `serversTransport` que algum
+  service do arquivo referencia é recusado, com a lista de quem depende dele — o
+  Traefik desativaria esses services.
 - **Só edita o que é seu.** O painel só oferece editar/remover para objetos que
   existem no arquivo que ele mesmo escreve. Objetos vindos do Docker — ou de outros
   arquivos que o file provider observa — aparecem marcados como somente leitura.

@@ -24,10 +24,13 @@ export function ServicesView({
   services,
   owned,
   locked,
+  transports,
 }: {
   services: Record<Protocol, TraefikService[]>;
   owned: Record<Protocol, string[]>;
   locked: Record<Protocol, string[]>;
+  /** serversTransports do arquivo, para o seletor do formulário. */
+  transports: string[];
 }) {
   const nav = useNextRouter();
   const [proto, setProto] = useState<Protocol>("http");
@@ -222,7 +225,13 @@ export function ServicesView({
         />
       </div>
 
-      <ResourceEditor kind="services" section={proto} target={target} onClose={() => setTarget(null)} />
+      <ResourceEditor
+        kind="services"
+        section={proto}
+        target={target}
+        onClose={() => setTarget(null)}
+        knownTransports={transports}
+      />
     </>
   );
 }
