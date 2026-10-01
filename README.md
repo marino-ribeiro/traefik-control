@@ -136,6 +136,8 @@ TRAEFIK_MOCK=1 npm run dev
 | `SERVER_PUBLIC_IP` | descoberto | IP(s) público(s) na Visão geral, separados por vírgula |
 | `SERVER_INTERNAL_IP` | interfaces de rede | IP(s) interno(s). **No Docker, informe** — o container só vê o próprio IP |
 | `PUBLIC_IP_LOOKUP` | `1` | `0` impede o painel de perguntar o IP público a `api.ipify.org` |
+| `FRAME_ANCESTORS` | — (só o próprio painel) | Origens que podem exibi-lo num `<iframe>`, ex.: `https://intranet.empresa.com.br` |
+| `UI_HOST` | `traefik.exemplo.com` | Só no compose: o `Host()` do router do painel no Traefik |
 
 Vazio em `TRAEFIK_API_URL` liga o modo mock automaticamente — o painel nunca fica
 numa tela em branco por falta de configuração.
@@ -154,6 +156,43 @@ providers:
     filename: /dynamic/dynamic.yml   # o MESMO arquivo do painel
     watch: true                      # sem isso, nada recarrega
 ```
+
+## Embutir na intranet (iframe)
+
+Por padrão o painel só pode ser exibido por ele mesmo (`frame-ancestors 'self'`) —
+nenhum outro site consegue emoldurá-lo para induzir cliques (clickjacking). Para
+abrir dentro da intranet:
+
+```bash
+UI_HOST=traefik.empresa.com.br
+FRAME_ANCESTORS=https://intranet.empresa.com.br
+```
+
+- **Mesmo domínio registrável.** `intranet.` e `traefik.empresa.com.br` contam como o
+  mesmo site, e o cookie de sessão funciona dentro do iframe. Em domínios
+  diferentes, Safari e Chrome bloqueiam o cookie e o login não fica.
+- **O iframe não substitui o login.** O painel continua acessível pelo endereço
+  direto; quem dispensa a senha é o SSO abaixo, não a moldura.
+- O header sai do `src/proxy.ts`, lido a cada requisição — dá para mudar a variável
+  sem refazer a imagem. Valores que não sejam origens `http(s)://host[:porta]` são
+  descartados.
+
+### Próximo passo: SSO com Keycloak (planejado, não implementado)
+
+O desenho previsto, para que o usuário logado na intranet entre direto:
+
+1. **OIDC no próprio painel** (Authorization Code + PKCE), como client confidencial
+   do realm da intranet. Preferido a um `oauth2-proxy` na frente porque permite
+   autorizar por papel (ex.: `traefik-viewer` só lê, `traefik-admin` grava) e
+   registrar **quem** fez cada alteração junto do backup.
+2. **Login silencioso no iframe**: tenta `prompt=none` aproveitando a sessão do
+   Keycloak; sem sessão, abre o login numa janela própria — o Keycloak, por padrão,
+   não aceita ser exibido em iframe.
+3. **Senha como acesso de emergência**: o login por `UI_PASSWORD` fica desligado por
+   padrão e reativável, para entrar quando o Keycloak estiver fora.
+
+No Keycloak será preciso: um client novo (confidencial, com a URL de retorno
+`https://<UI_HOST>/api/auth/callback`) e os papéis/grupos de quem pode ver e gravar.
 
 ## Primeiro deploy: o que conferir
 
@@ -267,6 +306,7 @@ justificativa da paleta está em `src/components/charts/palette.ts`.
 
 ```
 src/
+  proxy.ts          headers por requisição (quem pode exibir o painel num iframe)
   app/
     (app)/            páginas protegidas (dashboard, listas, gerenciar)
     login/            tela de acesso

@@ -71,13 +71,16 @@ services:
       SERVER_PUBLIC_IP: ${SERVER_PUBLIC_IP:-}
       SERVER_INTERNAL_IP: ${SERVER_INTERNAL_IP:-}
       PUBLIC_IP_LOOKUP: ${PUBLIC_IP_LOOKUP:-1}
+      # Origens que podem embutir o painel num iframe (ex.: a intranet).
+      # Vazio = só o próprio painel. Ver .env.example.
+      FRAME_ANCESTORS: ${FRAME_ANCESTORS:-}
     volumes:
       - dynamic:/dynamic
     networks:
       - edge
     labels:
       traefik.enable: "true"
-      traefik.http.routers.traefik-ui.rule: Host(`traefik.exemplo.com`)
+      traefik.http.routers.traefik-ui.rule: Host(`${UI_HOST:-traefik.exemplo.com}`)
       traefik.http.routers.traefik-ui.entrypoints: websecure
       traefik.http.routers.traefik-ui.tls.certresolver: letsencrypt
       traefik.http.services.traefik-ui.loadbalancer.server.port: "3000"
